@@ -1,29 +1,22 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Outfit, Sora } from "next/font/google";
+import { IBM_Plex_Mono, Instrument_Sans } from "next/font/google";
 import type { ReactNode } from "react";
 import { PERSONAL } from "@/data/personal";
 import ThemeProvider from "@/design-system/providers/ThemeProvider";
 import ThemeScript from "@/design-system/providers/ThemeScript";
 import "./globals.css";
 
-const sora = Sora({
+const instrumentSans = Instrument_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-sora",
+  weight: ["400", "500", "600"],
+  variable: "--font-instrument-sans",
   display: "swap",
 });
 
-const outfit = Outfit({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600"],
-  variable: "--font-outfit",
-  display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
+const ibmPlexMono = IBM_Plex_Mono({
   subsets: ["latin"],
   weight: ["400", "500"],
-  variable: "--font-jetbrains",
+  variable: "--font-ibm-plex-mono",
   display: "swap",
 });
 
@@ -75,7 +68,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
     <html
       lang="pt-BR"
       suppressHydrationWarning
-      className={`${sora.variable} ${outfit.variable} ${jetbrainsMono.variable}`}
+      className={`${instrumentSans.variable} ${ibmPlexMono.variable}`}
     >
       <body className="font-body">
         <ThemeScript />

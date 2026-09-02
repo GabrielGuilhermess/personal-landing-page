@@ -3,29 +3,59 @@
 @tailwind utilities;
 
 :root {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8f9fb;
-  --bg-tertiary: #f0f2f5;
-  --text-primary: #111624;
-  --text-secondary: #4a5264;
-  --text-tertiary: #6b7486;
-  --border-color: #e4e7ec;
-  --brand-accent: #22a971;
-  --card-bg: #ffffff;
-  --header-bg: rgba(255, 255, 255, 0.8);
+  color-scheme: light;
+
+  --background: #F7F7F5;
+  --surface: #FFFFFF;
+  --text: #111318;
+  --muted: #62666D;
+  --divider: #D9DCE1;
+  --brand-primary: #2F6BFF;
+
+  --radius-detail: 4px;
+  --radius-control: 6px;
+  --radius-surface: 8px;
+
+  --motion-fast: 120ms;
+  --motion-normal: 180ms;
+  --motion-slow: 240ms;
+  --motion-easing: cubic-bezier(.2,.8,.2,1);
+
+  --elevation-raised: 0 8px 24px rgba(17, 19, 24, 0.10);
+
+  /* Temporary compatibility aliases while product sections migrate. */
+  --bg-primary: var(--background);
+  --bg-secondary: var(--surface);
+  --bg-tertiary: var(--background);
+  --text-primary: var(--text);
+  --text-secondary: var(--muted);
+  --text-tertiary: var(--muted);
+  --border-color: var(--divider);
+  --brand-accent: var(--brand-primary);
+  --card-bg: var(--surface);
+  --header-bg: color-mix(in srgb, var(--surface) 92%, transparent);
 }
 
 .dark {
-  --bg-primary: #0a0e1a;
-  --bg-secondary: #111624;
-  --bg-tertiary: #1b2030;
-  --text-primary: #f0f2f5;
-  --text-secondary: #9ba4b4;
-  --text-tertiary: #6b7486;
-  --border-color: #252b39;
-  --brand-accent: #45c38b;
-  --card-bg: #111624;
-  --header-bg: rgba(10, 14, 26, 0.85);
+  color-scheme: dark;
+
+  --background: #0D0F12;
+  --surface: #14171B;
+  --text: #F3F4F6;
+  --muted: #969CA5;
+  --divider: #292D33;
+  --brand-primary: #2F6BFF;
+
+  --bg-primary: var(--background);
+  --bg-secondary: var(--surface);
+  --bg-tertiary: var(--background);
+  --text-primary: var(--text);
+  --text-secondary: var(--muted);
+  --text-tertiary: var(--muted);
+  --border-color: var(--divider);
+  --brand-accent: var(--brand-primary);
+  --card-bg: var(--surface);
+  --header-bg: color-mix(in srgb, var(--surface) 92%, transparent);
 }
 
 html {
@@ -34,77 +64,88 @@ html {
 }
 
 body {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: var(--font-outfit), sans-serif;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  background: var(--background);
+  color: var(--text);
+  font-family: var(--font-instrument-sans), sans-serif;
+  transition:
+    background-color var(--motion-normal) var(--motion-easing),
+    color var(--motion-normal) var(--motion-easing);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 * {
-  border-color: var(--border-color);
+  border-color: var(--divider);
 }
 
 ::selection {
-  background: rgba(34, 169, 113, 0.22);
-  color: var(--text-primary);
+  background: color-mix(in srgb, var(--brand-primary) 18%, transparent);
+  color: var(--text);
 }
 
 @layer components {
   .glass-card {
-    @apply rounded-3xl border shadow-card;
-    background: color-mix(in srgb, var(--card-bg) 88%, transparent);
-    backdrop-filter: blur(18px);
-    transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+    border: 1px solid var(--divider);
+    border-radius: var(--radius-surface);
+    background: var(--surface);
+    box-shadow: none;
+    backdrop-filter: none;
+    transition: border-color var(--motion-normal) var(--motion-easing);
   }
 
   .glass-card:hover {
-    @apply shadow-card-hover;
-    border-color: rgba(34, 169, 113, 0.3);
+    border-color: var(--divider);
+    box-shadow: none;
   }
 
   .text-gradient {
-    @apply bg-gradient-to-r from-brand-400 to-brand-600 bg-clip-text text-transparent;
+    background: none;
+    color: var(--text);
   }
 
   .grid-background {
-    background-image:
-      linear-gradient(to right, rgba(17, 22, 36, 0.06) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(17, 22, 36, 0.06) 1px, transparent 1px);
-    background-size: 48px 48px;
-  }
-
-  .dark .grid-background {
-    background-image:
-      linear-gradient(to right, rgba(240, 242, 245, 0.05) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(240, 242, 245, 0.05) 1px, transparent 1px);
+    background-image: none;
   }
 
   .section-container {
-    @apply mx-auto max-w-6xl px-5 sm:px-8;
+    width: 100%;
+    max-width: 1440px;
+    margin-inline: auto;
+    padding-inline: 16px;
+  }
+
+  @media (min-width: 390px) {
+    .section-container {
+      padding-inline: 20px;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .section-container {
+      padding-inline: 32px;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .section-container {
+      padding-inline: 80px;
+    }
+  }
+
+  @media (min-width: 1440px) {
+    .section-container {
+      padding-inline: 96px;
+    }
   }
 }
 
 @layer utilities {
-  .animate-delay-100 {
-    animation-delay: 0.1s;
-  }
-
-  .animate-delay-200 {
-    animation-delay: 0.2s;
-  }
-
-  .animate-delay-300 {
-    animation-delay: 0.3s;
-  }
-
-  .animate-delay-400 {
-    animation-delay: 0.4s;
-  }
-
+  .animate-delay-100,
+  .animate-delay-200,
+  .animate-delay-300,
+  .animate-delay-400,
   .animate-delay-500 {
-    animation-delay: 0.5s;
+    animation-delay: 0ms;
   }
 
   .line-clamp-2 {
@@ -121,15 +162,30 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
+  background: var(--background);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(34, 169, 113, 0.35);
-  border-radius: 9999px;
-  border: 2px solid var(--bg-secondary);
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+  border-radius: 999px;
+  border: 2px solid var(--background);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(34, 169, 113, 0.55);
+  background: color-mix(in srgb, var(--muted) 65%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
