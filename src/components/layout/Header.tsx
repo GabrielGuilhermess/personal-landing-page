@@ -1,12 +1,11 @@
 import Container from "@/design-system/components/Container";
 import GitHubMark from "@/design-system/components/GitHubMark";
 import ThemeControl from "@/design-system/components/ThemeControl";
+import { LANDING_COPY, type Locale } from "@/i18n/landing";
 
-const NAV_ITEMS = [
-  { href: "#competencias", label: "Competências" },
-  { href: "#projetos", label: "Projetos" },
-  { href: "#sobre", label: "Sobre" },
-] as const;
+interface HeaderProps {
+  locale: Locale;
+}
 
 function LinkedInMark() {
   return (
@@ -17,26 +16,33 @@ function LinkedInMark() {
 }
 
 const externalLinkClass =
-  "inline-flex h-[30px] w-[30px] items-center justify-center text-[var(--muted)] transition-colors duration-[var(--motion-fast)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]";
+  "inline-flex h-9 w-9 items-center justify-center text-[var(--muted)] transition-colors duration-[var(--motion-fast)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]";
 
-export default function Header() {
+export default function Header({ locale }: HeaderProps) {
+  const copy = LANDING_COPY[locale];
+  const navigationItems = [
+    { href: "#competencias", label: copy.navigation.competencies },
+    { href: "#projetos", label: copy.navigation.projects },
+    { href: "#sobre", label: copy.navigation.about },
+  ] as const;
+
   return (
     <header className="h-[68px] bg-[var(--background)]">
       <Container className="grid h-full grid-cols-[1fr_auto] items-center gap-5 md:grid-cols-[1fr_auto_auto] md:gap-6 min-[1100px]:gap-[30px]">
         <a
           href="#hero"
-          className="w-fit text-[15px] font-semibold tracking-[-0.02em] text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+          className="inline-flex min-h-9 w-fit items-center text-[15px] font-semibold tracking-[-0.02em] text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
         >
           Gabriel Guilherme
         </a>
 
-        <nav aria-label="Navegação principal" className="hidden md:block">
+        <nav aria-label={copy.navigation.ariaLabel} className="hidden md:block">
           <ul className="flex items-center gap-5 min-[1100px]:gap-7">
-            {NAV_ITEMS.map((item) => (
+            {navigationItems.map((item) => (
               <li key={item.href}>
                 <a
                   href={item.href}
-                  className="text-[13px] text-[var(--muted)] underline-offset-4 transition-colors duration-[var(--motion-fast)] hover:text-[var(--text)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+                  className="inline-flex min-h-9 items-center text-[13px] text-[var(--muted)] underline-offset-4 transition-colors duration-[var(--motion-fast)] hover:text-[var(--text)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
                 >
                   {item.label}
                 </a>
@@ -47,28 +53,14 @@ export default function Header() {
 
         <div className="flex items-center gap-[11px]">
           <div className="hidden items-center gap-[11px] min-[1100px]:flex">
-            <a
-              href="https://github.com/GabrielGuilhermess"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="GitHub"
-              className={externalLinkClass}
-            >
+            <a href="https://github.com/GabrielGuilhermess" target="_blank" rel="noopener noreferrer" aria-label="GitHub" className={externalLinkClass}>
               <GitHubMark className="h-[17px] w-[17px]" />
             </a>
-            <a
-              href="https://www.linkedin.com/in/gabrielguilhermess/"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="LinkedIn"
-              className={externalLinkClass}
-            >
-              <span className="h-[17px] w-[17px]">
-                <LinkedInMark />
-              </span>
+            <a href="https://www.linkedin.com/in/gabrielguilhermess/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className={externalLinkClass}>
+              <span className="h-[17px] w-[17px]"><LinkedInMark /></span>
             </a>
           </div>
-          <ThemeControl className="h-[30px] w-[30px] border-0 hover:bg-[var(--surface)]" />
+          <ThemeControl labels={copy.theme} className="h-9 w-9 border-0 hover:bg-[var(--surface)]" />
         </div>
       </Container>
     </header>

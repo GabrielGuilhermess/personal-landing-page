@@ -1,23 +1,12 @@
-import Footer from "@/components/layout/Footer";
-import Header from "@/components/layout/Header";
-import AboutSection from "@/components/sections/AboutSection";
-import ContactSection from "@/components/sections/ContactSection";
-import HeroSection from "@/components/sections/HeroSection";
-import ProjectsSection from "@/components/sections/ProjectsSection";
-import SkillsSection from "@/components/sections/SkillsSection";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { resolveLocaleFromAcceptLanguage } from "@/i18n/locale";
 
-export default function HomePage() {
-  return (
-    <>
-      <Header />
-      <main className="overflow-x-hidden">
-        <HeroSection />
-        <SkillsSection />
-        <ProjectsSection />
-        <AboutSection />
-        <ContactSection />
-      </main>
-      <Footer />
-    </>
+export default async function HomePage() {
+  const requestHeaders = await headers();
+  const locale = resolveLocaleFromAcceptLanguage(
+    requestHeaders.get("accept-language"),
   );
+
+  redirect(`/${locale}`);
 }
