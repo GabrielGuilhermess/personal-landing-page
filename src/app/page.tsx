@@ -12,9 +12,9 @@ export default function HomePage() {
       <Header />
       <main className="overflow-x-hidden">
         <HeroSection />
-        <AboutSection />
         <SkillsSection />
         <ProjectsSection />
+        <AboutSection />
         <ContactSection />
       </main>
       <Footer />

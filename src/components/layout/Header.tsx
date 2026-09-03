@@ -3,7 +3,7 @@ import GitHubMark from "@/design-system/components/GitHubMark";
 import ThemeControl from "@/design-system/components/ThemeControl";
 
 const NAV_ITEMS = [
-  { href: "#skills", label: "Competências" },
+  { href: "#competencias", label: "Competências" },
   { href: "#projetos", label: "Projetos" },
   { href: "#sobre", label: "Sobre" },
 ] as const;
