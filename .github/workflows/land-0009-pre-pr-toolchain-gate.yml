@@ -31,6 +31,7 @@ jobs:
           pkg.scripts.lint = 'eslint .';
           pkg.packageManager = 'pnpm@10.26.0';
           pkg.engines = { node: '24.x', pnpm: '10.26.0' };
+          pkg.pnpm = { onlyBuiltDependencies: ['unrs-resolver'] };
           fs.writeFileSync('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
           fs.writeFileSync('.nvmrc', '24.20.0\n');
           fs.writeFileSync('.node-version', '24.20.0\n');
@@ -40,7 +41,7 @@ jobs:
       - name: Upgrade supported toolchain
         run: |
           pnpm add --save-exact next@16 react@19.2 react-dom@19.2
-          pnpm add --save-exact --save-dev eslint@10.9.1 eslint-config-next@16 @types/node@24 @types/react@19 @types/react-dom@19
+          pnpm add --save-exact --save-dev eslint@9.39.5 eslint-config-next@16 @types/node@24 @types/react@19 @types/react-dom@19
           rm package-lock.json
           cat > eslint.config.mjs <<'EOF'
           import { defineConfig, globalIgnores } from "eslint/config";
