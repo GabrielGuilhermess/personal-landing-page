@@ -21,7 +21,7 @@ const externalLinkClass =
 
 export default function Header() {
   return (
-    <header className="h-[68px] border-b border-[var(--divider)] bg-[var(--background)]">
+    <header className="h-[68px] bg-[var(--background)]">
       <Container className="grid h-full grid-cols-[1fr_auto] items-center gap-5 min-[1100px]:grid-cols-[1fr_auto_auto] min-[1100px]:gap-[30px]">
         <a
           href="#hero"
