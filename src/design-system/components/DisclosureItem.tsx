@@ -11,6 +11,7 @@ export interface DisclosureItemProps {
   className?: string;
   summaryClassName?: string;
   summaryContentClassName?: string;
+  summaryValueClassName?: string;
   contentClassName?: string;
 }
 
@@ -23,6 +24,7 @@ export default function DisclosureItem({
   className,
   summaryClassName,
   summaryContentClassName,
+  summaryValueClassName,
   contentClassName,
 }: DisclosureItemProps) {
   return (
@@ -40,7 +42,7 @@ export default function DisclosureItem({
         >
           {index ? <span className="font-mono text-[13px] text-[var(--muted)]">{index}</span> : null}
           <span className="font-medium text-[var(--text)]">{title}</span>
-          <span className="min-w-0 text-sm text-[var(--muted)]">{summary}</span>
+          <span className={cn("min-w-0 text-sm text-[var(--muted)]", summaryValueClassName)}>{summary}</span>
         </div>
       }
     >
