@@ -3,7 +3,7 @@ import HeroVisual from "./HeroVisual";
 
 export default function HeroSection() {
   return (
-    <section id="hero">
+    <section id="hero" className="border-t border-[var(--divider)]">
       <Container className="grid min-h-0 items-center gap-[42px] py-[66px] pb-[52px] min-[640px]:py-[72px] min-[640px]:pb-[60px] min-[1100px]:min-h-[600px] min-[1100px]:grid-cols-[500px_1fr] min-[1100px]:gap-[62px] min-[1100px]:py-[84px] min-[1100px]:pb-[72px]">
         <div>
           <p className="mb-[18px] font-mono text-xs tracking-[0.04em] text-[var(--muted)] min-[1100px]:mb-5">

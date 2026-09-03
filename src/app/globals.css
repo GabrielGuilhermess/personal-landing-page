@@ -10,6 +10,7 @@
   --text: #111318;
   --muted: #62666D;
   --divider: #D9DCE1;
+  --divider-item: #E8EAED;
   --brand-primary: #2F6BFF;
 
   --radius-detail: 4px;
@@ -44,6 +45,7 @@
   --text: #F3F4F6;
   --muted: #969CA5;
   --divider: #292D33;
+  --divider-item: #1D2127;
   --brand-primary: #2F6BFF;
 
   --bg-primary: var(--background);

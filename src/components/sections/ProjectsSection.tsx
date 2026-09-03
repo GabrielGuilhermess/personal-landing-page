@@ -31,16 +31,7 @@ export default function ProjectsSection() {
 
         <div>
           <article aria-labelledby={`${devToolbox.id}-title`}>
-            <MediaPreview
-              src={devToolbox.imageUrl}
-              alt={devToolbox.imageAlt}
-              aspectRatio="8 / 5"
-              objectPosition="center top"
-              sizes="(min-width: 1280px) 1180px, calc(100vw - 40px)"
-              className="bg-[var(--surface)]"
-            />
-
-            <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end md:gap-8">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end md:gap-8">
               <div>
                 <h3
                   id={`${devToolbox.id}-title`}
@@ -54,34 +45,45 @@ export default function ProjectsSection() {
               </div>
               <ProjectLinks project={devToolbox} />
             </div>
+
+            <div className="mt-6 md:mt-7">
+              <MediaPreview
+                src={devToolbox.imageUrl}
+                alt={devToolbox.imageAlt}
+                aspectRatio="8 / 5"
+                objectPosition="center top"
+                sizes="(min-width: 1280px) 1180px, calc(100vw - 40px)"
+                className="bg-[var(--surface)]"
+              />
+            </div>
           </article>
 
           <article
             aria-labelledby={`${economiaBrasil.id}-title`}
-            className="mt-10 grid gap-7 border-t border-[var(--divider)] pt-10 md:mt-12 md:gap-9 md:pt-12 min-[1100px]:grid-cols-[0.7fr_1.3fr] min-[1100px]:items-end min-[1100px]:gap-12"
+            className="mt-10 border-t border-[var(--divider-item)] pt-10 md:mt-12 md:pt-12"
           >
-            <div className="min-[1100px]:pb-4">
-              <h3
-                id={`${economiaBrasil.id}-title`}
-                className="text-[25px] font-semibold tracking-[-0.03em] text-[var(--text)] md:text-[28px]"
-              >
-                {economiaBrasil.title}
-              </h3>
-              <p className="mt-3 max-w-[440px] text-[15px] leading-[1.65] text-[var(--muted)]">
-                {economiaBrasil.description}
-              </p>
-              <div className="mt-5">
-                <ProjectLinks project={economiaBrasil} />
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end md:gap-8">
+              <div>
+                <h3
+                  id={`${economiaBrasil.id}-title`}
+                  className="text-[25px] font-semibold tracking-[-0.03em] text-[var(--text)] md:text-[28px]"
+                >
+                  {economiaBrasil.title}
+                </h3>
+                <p className="mt-2 max-w-[620px] text-[15px] leading-[1.65] text-[var(--muted)]">
+                  {economiaBrasil.description}
+                </p>
               </div>
+              <ProjectLinks project={economiaBrasil} />
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(180px,0.46fr)] sm:items-end md:gap-4">
+            <div className="mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(180px,0.46fr)] sm:items-end md:mt-7 md:gap-4">
               <MediaPreview
                 src={economiaBrasil.imageUrl}
                 alt={economiaBrasil.imageAlt}
                 aspectRatio="8 / 5"
                 objectPosition="center top"
-                sizes="(min-width: 1100px) 620px, (min-width: 640px) 66vw, calc(100vw - 40px)"
+                sizes="(min-width: 1100px) 820px, (min-width: 640px) 66vw, calc(100vw - 40px)"
                 className="bg-[var(--surface)]"
               />
               <MediaPreview
@@ -89,7 +91,7 @@ export default function ProjectsSection() {
                 alt=""
                 aspectRatio="4 / 5"
                 objectPosition="82% top"
-                sizes="(min-width: 1100px) 260px, 30vw"
+                sizes="(min-width: 1100px) 300px, 30vw"
                 className="hidden bg-[var(--surface)] sm:block"
               />
             </div>
