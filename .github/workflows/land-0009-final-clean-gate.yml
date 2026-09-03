@@ -1,0 +1,166 @@
+name: LAND-0009 final clean gate
+
+on:
+  push:
+    branches:
+      - chore/LAND-0009-final-clean-gate
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.20.0
+
+      - name: Resolve stable pnpm
+        run: |
+          PNPM_VERSION="$(npm view pnpm version)"
+          npm install --global "pnpm@${PNPM_VERSION}"
+          echo "PNPM_VERSION=${PNPM_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Normalize manifest and migrate lockfile
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          for (const group of ['dependencies', 'devDependencies']) {
+            for (const name of Object.keys(pkg[group] ?? {})) {
+              const entry = lock.packages[`node_modules/${name}`];
+              if (!entry?.version) throw new Error(`Missing resolved version for ${name}`);
+              pkg[group][name] = entry.version;
+            }
+          }
+          pkg.scripts.lint = 'eslint . --max-warnings=0';
+          pkg.packageManager = `pnpm@${process.env.PNPM_VERSION}`;
+          pkg.engines = { node: '24.x', pnpm: process.env.PNPM_VERSION };
+          delete pkg.pnpm;
+          fs.writeFileSync('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
+          fs.writeFileSync('.nvmrc', '24.20.0\n');
+          fs.writeFileSync('.node-version', '24.20.0\n');
+          fs.writeFileSync('.npmrc', 'save-exact=true\nengine-strict=true\n');
+          NODE
+          cat > pnpm-workspace.yaml <<'EOF'
+          packages:
+            - .
+
+          allowBuilds:
+            unrs-resolver: true
+
+          overrides:
+            brace-expansion@1.1.13: 1.1.18
+            brace-expansion@5.0.5: 5.0.9
+            browserslist@4.28.1: 4.28.7
+            postcss-selector-parser@6.1.2: 6.1.3
+          EOF
+          pnpm import
+
+      - name: Upgrade supported toolchain and patched dependencies
+        run: |
+          pnpm add --save-exact next@16 react@19.2 react-dom@19.2
+          pnpm add --save-exact --save-dev \
+            eslint@9.39.5 \
+            eslint-config-next@16 \
+            @types/node@24 \
+            @types/react@19 \
+            @types/react-dom@19 \
+            postcss@latest \
+            autoprefixer@latest
+          rm package-lock.json
+          cat > eslint.config.mjs <<'EOF'
+          import { defineConfig, globalIgnores } from "eslint/config";
+          import nextVitals from "eslint-config-next/core-web-vitals";
+
+          export default defineConfig([
+            ...nextVitals,
+            globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
+          ]);
+          EOF
+          rm .eslintrc.json
+
+      - name: Frozen install
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify exact direct dependency pins
+        run: |
+          node <<'NODE'
+          const pkg = require('./package.json');
+          for (const group of ['dependencies', 'devDependencies']) {
+            for (const [name, version] of Object.entries(pkg[group] ?? {})) {
+              if (!/^\d+\.\d+\.\d+(?:[-+].+)?$/.test(version)) {
+                throw new Error(`${group}.${name} is not exactly pinned: ${version}`);
+              }
+            }
+          }
+          NODE
+
+      - name: Report effective versions
+        run: |
+          node --version
+          pnpm --version
+          pnpm exec next --version
+          pnpm exec eslint --version
+          pnpm exec tsc --version
+          pnpm list --depth 0
+
+      - name: Lint
+        run: |
+          start=$(date +%s%3N)
+          pnpm lint
+          end=$(date +%s%3N)
+          echo "LINT_MS=$((end-start))" >> "$GITHUB_ENV"
+          echo "Lint duration: $((end-start)) ms"
+
+      - name: Production build
+        run: |
+          start=$(date +%s%3N)
+          pnpm build
+          end=$(date +%s%3N)
+          echo "BUILD_MS=$((end-start))" >> "$GITHUB_ENV"
+          echo "Build duration: $((end-start)) ms"
+
+      - name: Verify build does not rewrite tracked config
+        run: git diff --exit-code -- tsconfig.json next-env.d.ts
+
+      - name: Security audit
+        run: |
+          pnpm audit --json > audit.json
+          pnpm audit --audit-level low
+
+      - name: Dependency freshness report
+        if: always()
+        run: pnpm outdated --format json > outdated.json || true
+
+      - name: Gate summary
+        if: always()
+        run: |
+          echo "Lint: ${LINT_MS:-not-completed} ms"
+          echo "Build: ${BUILD_MS:-not-completed} ms"
+          echo "Node: $(node --version)"
+          echo "pnpm: $(pnpm --version)"
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: land-0009-final-clean
+          path: |
+            package.json
+            pnpm-lock.yaml
+            pnpm-workspace.yaml
+            eslint.config.mjs
+            .nvmrc
+            .node-version
+            .npmrc
+            audit.json
+            outdated.json
+          include-hidden-files: true
+          retention-days: 1
