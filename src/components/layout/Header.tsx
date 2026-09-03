@@ -22,7 +22,7 @@ const externalLinkClass =
 export default function Header() {
   return (
     <header className="h-[68px] bg-[var(--background)]">
-      <Container className="grid h-full grid-cols-[1fr_auto] items-center gap-5 min-[1100px]:grid-cols-[1fr_auto_auto] min-[1100px]:gap-[30px]">
+      <Container className="grid h-full grid-cols-[1fr_auto] items-center gap-5 md:grid-cols-[1fr_auto_auto] md:gap-6 min-[1100px]:gap-[30px]">
         <a
           href="#hero"
           className="w-fit text-[15px] font-semibold tracking-[-0.02em] text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
@@ -30,8 +30,8 @@ export default function Header() {
           Gabriel Guilherme
         </a>
 
-        <nav aria-label="Navegação principal" className="hidden min-[1100px]:block">
-          <ul className="flex items-center gap-7">
+        <nav aria-label="Navegação principal" className="hidden md:block">
+          <ul className="flex items-center gap-5 min-[1100px]:gap-7">
             {NAV_ITEMS.map((item) => (
               <li key={item.href}>
                 <a

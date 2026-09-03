@@ -17,7 +17,7 @@ export default function HeroSection() {
           </p>
         </div>
 
-        <HeroVisual className="w-full max-w-full" />
+        <HeroVisual className="w-full max-w-full min-[640px]:mx-auto min-[640px]:max-w-[620px] min-[1100px]:max-w-none" />
       </Container>
     </section>
   );

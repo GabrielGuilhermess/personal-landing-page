@@ -46,13 +46,13 @@ export default function ProjectsSection() {
               <ProjectLinks project={devToolbox} />
             </div>
 
-            <div className="mt-6 md:mt-7">
+            <div className="mt-6 md:mt-7 min-[1440px]:max-w-[1120px]">
               <MediaPreview
                 src={devToolbox.imageUrl}
                 alt={devToolbox.imageAlt}
                 aspectRatio="8 / 5"
                 objectPosition="center top"
-                sizes="(min-width: 1280px) 1180px, calc(100vw - 40px)"
+                sizes="(min-width: 1440px) 1120px, (min-width: 1280px) 1120px, calc(100vw - 40px)"
                 className="bg-[var(--surface)]"
               />
             </div>
@@ -77,13 +77,13 @@ export default function ProjectsSection() {
               <ProjectLinks project={economiaBrasil} />
             </div>
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(180px,0.46fr)] sm:items-end md:mt-7 md:gap-4">
+            <div className="mt-6 grid gap-3 md:mt-7 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(240px,0.46fr)] min-[1100px]:items-end min-[1100px]:gap-4 min-[1440px]:max-w-[1120px]">
               <MediaPreview
                 src={economiaBrasil.imageUrl}
                 alt={economiaBrasil.imageAlt}
                 aspectRatio="8 / 5"
                 objectPosition="center top"
-                sizes="(min-width: 1100px) 820px, (min-width: 640px) 66vw, calc(100vw - 40px)"
+                sizes="(min-width: 1440px) 760px, (min-width: 1100px) 760px, (min-width: 768px) calc(100vw - 64px), calc(100vw - 40px)"
                 className="bg-[var(--surface)]"
               />
               <MediaPreview
@@ -91,8 +91,8 @@ export default function ProjectsSection() {
                 alt=""
                 aspectRatio="4 / 5"
                 objectPosition="82% top"
-                sizes="(min-width: 1100px) 300px, 30vw"
-                className="hidden bg-[var(--surface)] sm:block"
+                sizes="(min-width: 1440px) 344px, (min-width: 1100px) 344px"
+                className="hidden bg-[var(--surface)] min-[1100px]:block"
               />
             </div>
           </article>
