@@ -1,0 +1,108 @@
+name: LAND-0009 pre-PR toolchain gate
+
+on:
+  push:
+    branches:
+      - chore/LAND-0009-toolchain-upgrade-scratch
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+
+      - name: Install pinned pnpm
+        run: npm install --global pnpm@10.26.0
+
+      - name: Pin current direct dependencies
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          for (const group of ['dependencies', 'devDependencies']) {
+            for (const name of Object.keys(pkg[group] ?? {})) {
+              const entry = lock.packages[`node_modules/${name}`];
+              if (!entry?.version) throw new Error(`Missing resolved version for ${name}`);
+              pkg[group][name] = entry.version;
+            }
+          }
+          pkg.scripts.lint = 'eslint .';
+          pkg.packageManager = 'pnpm@10.26.0';
+          pkg.engines = { node: '24.x', pnpm: '10.26.0' };
+          fs.writeFileSync('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
+          fs.writeFileSync('.nvmrc', '24.20.0\n');
+          fs.writeFileSync('.node-version', '24.20.0\n');
+          fs.writeFileSync('.npmrc', 'save-exact=true\nengine-strict=true\n');
+          NODE
+          pnpm import
+
+      - name: Upgrade supported LTS toolchain
+        run: |
+          pnpm add --save-exact next@16 react@19.2 react-dom@19.2
+          pnpm add --save-exact --save-dev eslint@^9 eslint-config-next@16 @types/node@24 @types/react@19 @types/react-dom@19
+          rm package-lock.json
+          cat > eslint.config.mjs <<'EOF'
+          import { defineConfig, globalIgnores } from "eslint/config";
+          import nextVitals from "eslint-config-next/core-web-vitals";
+
+          export default defineConfig([
+            ...nextVitals,
+            globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
+          ]);
+          EOF
+          rm .eslintrc.json
+
+      - name: Frozen install
+        run: pnpm install --frozen-lockfile
+
+      - name: Report versions
+        run: |
+          node --version
+          pnpm --version
+          pnpm exec next --version
+          pnpm exec eslint --version
+          pnpm exec tsc --version
+          pnpm list --depth 0
+
+      - name: Lint
+        run: |
+          start=$(date +%s%3N)
+          pnpm lint
+          end=$(date +%s%3N)
+          echo "LINT_MS=$((end-start))" >> "$GITHUB_ENV"
+          echo "Lint duration: $((end-start)) ms"
+
+      - name: Production build
+        run: |
+          start=$(date +%s%3N)
+          pnpm build
+          end=$(date +%s%3N)
+          echo "BUILD_MS=$((end-start))" >> "$GITHUB_ENV"
+          echo "Build duration: $((end-start)) ms"
+
+      - name: Dependency health
+        if: always()
+        run: |
+          pnpm audit --json > audit.json || true
+          echo "Lint: ${LINT_MS:-not-completed} ms"
+          echo "Build: ${BUILD_MS:-not-completed} ms"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: land-0009-pre-pr-toolchain
+          path: |
+            package.json
+            pnpm-lock.yaml
+            eslint.config.mjs
+            .nvmrc
+            .node-version
+            .npmrc
+            audit.json
+          include-hidden-files: true
+          retention-days: 1
