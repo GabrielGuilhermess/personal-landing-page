@@ -1,51 +1,24 @@
-import { PERSONAL, SOCIAL_LINKS } from "@/data/personal";
-import GitHubMark from "@/design-system/components/GitHubMark";
-import { LinkButton } from "@/design-system/components";
+import Container from "@/design-system/components/Container";
+import HeroVisual from "./HeroVisual";
 
 export default function HeroSection() {
-  const githubLink = SOCIAL_LINKS.find((link) => link.platform === "GitHub");
-  const bioExcerpt = PERSONAL.bio.split("\n\n")[0];
-
   return (
-    <section id="hero" className="relative flex min-h-screen items-center overflow-hidden pt-32 pb-20 md:pt-40">
-      <div className="absolute inset-0 grid-background" />
-      <div
-        className="absolute inset-x-0 top-0 h-[32rem]"
-        style={{
-          background:
-            "radial-gradient(circle at 50% 20%, rgba(34, 169, 113, 0.12), transparent 62%)",
-        }}
-      />
-
-      <div className="section-container relative z-10 text-center">
-        <div className="mx-auto flex max-w-4xl flex-col items-center gap-6">
-          <p className="font-mono text-sm text-brand-500 animate-fade-in">{"projetos publicados | integrações | sistemas corporativos"}</p>
-          <h1 className="font-display text-display-sm font-bold tracking-tight animate-slide-up md:text-display-xl">
-            {PERSONAL.name}
+    <section id="hero">
+      <Container className="grid min-h-0 items-center gap-[42px] py-[66px] pb-[52px] min-[640px]:py-[72px] min-[640px]:pb-[60px] min-[1100px]:min-h-[600px] min-[1100px]:grid-cols-[500px_1fr] min-[1100px]:gap-[62px] min-[1100px]:py-[84px] min-[1100px]:pb-[72px]">
+        <div>
+          <p className="mb-[18px] font-mono text-xs tracking-[0.04em] text-[var(--muted)] min-[1100px]:mb-5">
+            Software Engineer
+          </p>
+          <h1 className="m-0 text-[40px] font-semibold leading-[1.03] tracking-[-0.05em] text-[var(--text)] min-[640px]:max-w-[650px] min-[640px]:text-5xl min-[1100px]:text-[54px] min-[1100px]:leading-[1.02] min-[1100px]:tracking-[-0.052em]">
+            Construção e evolução de software, pensando além da implementação.
           </h1>
-          <p className="text-gradient text-xl font-medium animate-slide-up animate-delay-100 md:text-2xl">
-            {PERSONAL.role}
+          <p className="mt-[22px] max-w-[332px] text-[16.5px] leading-[1.5] text-[var(--muted)] min-[640px]:max-w-[540px] min-[1100px]:mt-6 min-[1100px]:max-w-[460px] min-[1100px]:text-[17px]">
+            Sistemas bem projetados, observáveis e confiáveis, com foco em impacto real e evolução contínua.
           </p>
-          <p className="max-w-xl text-base leading-8 text-[var(--text-secondary)] animate-slide-up animate-delay-200 md:text-lg">
-            {bioExcerpt}
-          </p>
-          <div className="flex flex-col justify-center gap-4 animate-slide-up animate-delay-300 sm:flex-row">
-            <LinkButton href="#projetos" variant="primary" size="lg">
-              Ver Projetos
-            </LinkButton>
-            <LinkButton
-              href={githubLink?.url ?? "#"}
-              target="_blank"
-              rel="noreferrer"
-              variant="outline"
-              size="lg"
-              icon={<GitHubMark className="h-4 w-4" />}
-            >
-              GitHub
-            </LinkButton>
-          </div>
         </div>
-      </div>
+
+        <HeroVisual className="w-full max-w-full" />
+      </Container>
     </section>
   );
 }
