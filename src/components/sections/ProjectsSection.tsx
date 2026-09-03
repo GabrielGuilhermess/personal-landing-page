@@ -1,89 +1,101 @@
-import Image from "next/image";
-import { ExternalLink } from "lucide-react";
-import { PROJECTS } from "@/data/projects";
-import { Badge, Card, SectionHeading } from "@/design-system/components";
-import { cn } from "@/design-system/lib/utils";
+import { PROJECTS, type ProjectShowcase } from "@/data/projects";
+import { Container, ExternalLink, MediaPreview } from "@/design-system/components";
 
-const delayClasses = ["", "animate-delay-100", "animate-delay-200", "animate-delay-300", "animate-delay-400"];
-
-const statusBadgeVariant = {
-  live: "brand",
-  development: "warning",
-  planned: "default",
-} as const;
-
-const statusLabel = {
-  live: "Ao vivo",
-  development: "Em desenvolvimento",
-  planned: "Planejado",
-} as const;
+function ProjectLinks({ project }: { project: ProjectShowcase }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[14px]">
+      <ExternalLink href={project.deployUrl}>Abrir projeto</ExternalLink>
+      <ExternalLink href={project.githubUrl}>GitHub</ExternalLink>
+    </div>
+  );
+}
 
 export default function ProjectsSection() {
+  const [devToolbox, economiaBrasil] = PROJECTS;
+
   return (
-    <section id="projetos" className="section-container py-20 md:py-28">
-      <div className="space-y-10">
-        <SectionHeading
-          align="center"
-          label="Projetos"
-          title="Projeto publicado"
-          subtitle="Dev Toolbox publicado e disponível para navegação imediata."
-        />
+    <section
+      id="projetos"
+      aria-labelledby="projetos-title"
+      className="border-t border-[var(--divider)] py-[72px] md:py-[88px]"
+    >
+      <Container>
+        <header className="mb-8 md:mb-10">
+          <h2
+            id="projetos-title"
+            className="text-[30px] font-semibold leading-[1.1] tracking-[-0.035em] text-[var(--text)] md:text-[34px]"
+          >
+            Projetos
+          </h2>
+        </header>
 
-        <div className="mx-auto grid max-w-4xl grid-cols-1 gap-6">
-          {PROJECTS.map((project, index) => (
-            <a
-              key={project.id}
-              href={project.deployUrl}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`Abrir projeto ${project.title}`}
-              className={cn(
-                "group block rounded-3xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400",
-                delayClasses[index] ?? "",
-              )}
-            >
-              <Card
-                padding="none"
-                className="h-full overflow-hidden transition-transform duration-300 group-hover:-translate-y-1 group-hover:border-brand-500"
+        <div className="space-y-[72px] md:space-y-[96px]">
+          <article aria-labelledby={`${devToolbox.id}-title`}>
+            <MediaPreview
+              src={devToolbox.imageUrl}
+              alt={devToolbox.imageAlt}
+              aspectRatio="8 / 5"
+              objectPosition="center top"
+              sizes="(min-width: 1280px) 1180px, calc(100vw - 40px)"
+              className="bg-[var(--surface)]"
+            />
+
+            <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end md:gap-8">
+              <div>
+                <h3
+                  id={`${devToolbox.id}-title`}
+                  className="text-[25px] font-semibold tracking-[-0.03em] text-[var(--text)] md:text-[28px]"
+                >
+                  {devToolbox.title}
+                </h3>
+                <p className="mt-2 max-w-[620px] text-[15px] leading-[1.65] text-[var(--muted)]">
+                  {devToolbox.description}
+                </p>
+              </div>
+              <ProjectLinks project={devToolbox} />
+            </div>
+          </article>
+
+          <article
+            aria-labelledby={`${economiaBrasil.id}-title`}
+            className="grid gap-7 border-t border-[var(--divider)] pt-[72px] md:gap-9 md:pt-[88px] min-[1100px]:grid-cols-[0.7fr_1.3fr] min-[1100px]:items-end min-[1100px]:gap-12"
+          >
+            <div className="min-[1100px]:pb-4">
+              <h3
+                id={`${economiaBrasil.id}-title`}
+                className="text-[25px] font-semibold tracking-[-0.03em] text-[var(--text)] md:text-[28px]"
               >
-                <div className="relative aspect-video overflow-hidden rounded-t-3xl">
-                  <Image
-                    src={project.imageUrl}
-                    alt={`Preview do projeto ${project.title}`}
-                    fill
-                    sizes="(min-width: 1280px) 896px, (min-width: 768px) calc(100vw - 4rem), calc(100vw - 2.5rem)"
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-surface-950/40 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                </div>
+                {economiaBrasil.title}
+              </h3>
+              <p className="mt-3 max-w-[440px] text-[15px] leading-[1.65] text-[var(--muted)]">
+                {economiaBrasil.description}
+              </p>
+              <div className="mt-5">
+                <ProjectLinks project={economiaBrasil} />
+              </div>
+            </div>
 
-                <div className="flex h-full flex-col gap-4 p-6">
-                  <h3 className="font-display text-xl font-semibold">{project.title}</h3>
-                  <p className="line-clamp-2 text-sm leading-7 text-[var(--text-secondary)]">{project.description}</p>
-
-                  <div className="flex flex-wrap gap-1.5">
-                    {project.tags.map((tag) => (
-                      <Badge key={tag} variant="default" size="sm">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-
-                  <div className="mt-auto flex items-center justify-between gap-3">
-                    <Badge variant={statusBadgeVariant[project.status]} size="sm">
-                      {statusLabel[project.status]}
-                    </Badge>
-                    <span className="inline-flex items-center gap-2 text-sm font-medium text-brand-500">
-                      Abrir projeto
-                      <ExternalLink className="h-4 w-4" />
-                    </span>
-                  </div>
-                </div>
-              </Card>
-            </a>
-          ))}
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(180px,0.46fr)] sm:items-end md:gap-4">
+              <MediaPreview
+                src={economiaBrasil.imageUrl}
+                alt={economiaBrasil.imageAlt}
+                aspectRatio="8 / 5"
+                objectPosition="center top"
+                sizes="(min-width: 1100px) 620px, (min-width: 640px) 66vw, calc(100vw - 40px)"
+                className="bg-[var(--surface)]"
+              />
+              <MediaPreview
+                src={economiaBrasil.imageUrl}
+                alt=""
+                aspectRatio="4 / 5"
+                objectPosition="82% top"
+                sizes="(min-width: 1100px) 260px, 30vw"
+                className="hidden bg-[var(--surface)] sm:block"
+              />
+            </div>
+          </article>
         </div>
-      </div>
+      </Container>
     </section>
   );
 }
