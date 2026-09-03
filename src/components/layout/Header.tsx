@@ -1,139 +1,76 @@
-"use client";
+import Container from "@/design-system/components/Container";
+import GitHubMark from "@/design-system/components/GitHubMark";
+import ThemeControl from "@/design-system/components/ThemeControl";
 
-import { AnimatePresence, motion } from "framer-motion";
-import { Menu, X } from "lucide-react";
-import { useEffect, useState } from "react";
-import { NAV_ITEMS } from "@/data/navigation";
-import { PERSONAL } from "@/data/personal";
-import ThemeToggle from "@/design-system/components/ThemeToggle";
-import { useMediaQuery } from "@/design-system/hooks/useMediaQuery";
-import { useScrollspy } from "@/design-system/hooks/useScrollspy";
-import { cn } from "@/design-system/lib/utils";
+const NAV_ITEMS = [
+  { href: "#competencias", label: "Competências" },
+  { href: "#projetos", label: "Projetos" },
+  { href: "#sobre", label: "Sobre" },
+] as const;
 
-const SECTION_IDS = NAV_ITEMS.map((item) => item.href.replace("#", ""));
+function LinkedInMark() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="h-full w-full">
+      <path d="M5.4 8.8H2.2V19h3.2V8.8ZM3.8 3.7A1.9 1.9 0 1 0 3.8 7.5a1.9 1.9 0 0 0 0-3.8ZM10.6 8.8H7.5V19h3.1v-5.1c0-1.4.3-2.7 2-2.7 1.7 0 1.7 1.6 1.7 2.8V19h3.2v-5.5c0-2.7-.6-4.9-3.8-4.9-1.5 0-2.6.8-3 1.6h-.1V8.8Z" />
+    </svg>
+  );
+}
+
+const externalLinkClass =
+  "inline-flex h-[30px] w-[30px] items-center justify-center text-[var(--muted)] transition-colors duration-[var(--motion-fast)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]";
 
 export default function Header() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
-  const isDesktop = useMediaQuery("(min-width: 768px)");
-  const activeId = useScrollspy(SECTION_IDS, 120);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 40);
-    };
-
-    handleScroll();
-    window.addEventListener("scroll", handleScroll, { passive: true });
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-    };
-  }, []);
-
-  useEffect(() => {
-    document.body.style.overflow = isMenuOpen ? "hidden" : "";
-
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [isMenuOpen]);
-
-  useEffect(() => {
-    if (isDesktop) {
-      setIsMenuOpen(false);
-    }
-  }, [isDesktop]);
-
   return (
-    <header
-      className={cn(
-        "fixed inset-x-0 top-0 z-50 transition-all duration-300",
-        isScrolled && "border-b border-[var(--border-color)] bg-[var(--header-bg)] shadow-card backdrop-blur-xl",
-      )}
-    >
-      <div className="section-container">
-        <div className="flex h-20 items-center justify-between gap-6">
-          <a className="flex items-center gap-3" href="#hero" onClick={() => setIsMenuOpen(false)}>
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-500 font-display text-lg font-bold text-white shadow-glow">
-              G
-            </span>
-            <span className="font-display text-lg font-semibold tracking-tight">{PERSONAL.name}</span>
-          </a>
+    <header className="h-[68px] border-b border-[var(--divider)] bg-[var(--background)]">
+      <Container className="grid h-full grid-cols-[1fr_auto] items-center gap-5 min-[1100px]:grid-cols-[1fr_auto_auto] min-[1100px]:gap-[30px]">
+        <a
+          href="#hero"
+          className="w-fit text-[15px] font-semibold tracking-[-0.02em] text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+        >
+          Gabriel Guilherme
+        </a>
 
-          <nav className="hidden items-center gap-2 md:flex">
-            {NAV_ITEMS.map((item) => {
-              const isActive = activeId === item.href.replace("#", "");
-
-              return (
+        <nav aria-label="Navegação principal" className="hidden min-[1100px]:block">
+          <ul className="flex items-center gap-7">
+            {NAV_ITEMS.map((item) => (
+              <li key={item.href}>
                 <a
-                  key={item.href}
                   href={item.href}
-                  className={cn(
-                    "relative rounded-xl px-4 py-2 text-sm font-medium transition-colors",
-                    isActive ? "text-brand-500" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]",
-                  )}
+                  className="text-[13px] text-[var(--muted)] underline-offset-4 transition-colors duration-[var(--motion-fast)] hover:text-[var(--text)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
                 >
-                  {isActive ? (
-                    <motion.div
-                      layoutId="active-nav-indicator"
-                      className="absolute inset-0 -z-10 rounded-xl bg-brand-500/10"
-                      transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                    />
-                  ) : null}
-                  <span className="relative z-10">{item.label}</span>
+                  {item.label}
                 </a>
-              );
-            })}
-          </nav>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-            <button
-              type="button"
-              onClick={() => setIsMenuOpen((currentState) => !currentState)}
-              aria-label={isMenuOpen ? "Fechar menu" : "Abrir menu"}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-primary)] transition-colors hover:border-brand-500 hover:text-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 md:hidden"
+        <div className="flex items-center gap-[11px]">
+          <div className="hidden items-center gap-[11px] min-[1100px]:flex">
+            <a
+              href="https://github.com/GabrielGuilhermess"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="GitHub"
+              className={externalLinkClass}
             >
-              {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
+              <GitHubMark className="h-[17px] w-[17px]" />
+            </a>
+            <a
+              href="https://www.linkedin.com/in/gabrielguilhermess/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="LinkedIn"
+              className={externalLinkClass}
+            >
+              <span className="h-[17px] w-[17px]">
+                <LinkedInMark />
+              </span>
+            </a>
           </div>
+          <ThemeControl className="h-[30px] w-[30px] border-0 hover:bg-[var(--surface)]" />
         </div>
-      </div>
-
-      <AnimatePresence>
-        {isMenuOpen ? (
-          <motion.div
-            initial={{ opacity: 0, y: -16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-            className="border-b border-[var(--border-color)] bg-[var(--bg-primary)] shadow-card md:hidden"
-          >
-            <nav className="section-container flex flex-col gap-2 py-4">
-              {NAV_ITEMS.map((item) => {
-                const isActive = activeId === item.href.replace("#", "");
-
-                return (
-                  <a
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setIsMenuOpen(false)}
-                    className={cn(
-                      "rounded-2xl px-4 py-3 text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-brand-500/10 text-brand-500"
-                        : "text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]",
-                    )}
-                  >
-                    {item.label}
-                  </a>
-                );
-              })}
-            </nav>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+      </Container>
     </header>
   );
 }
