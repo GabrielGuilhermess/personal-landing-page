@@ -1,0 +1,103 @@
+name: LAND-0008 responsive audit
+
+on:
+  push:
+    branches:
+      - refactor/LAND-0008-responsive-composition
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm install --no-save --package-lock=false playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Start application
+        run: |
+          npm run start -- --hostname 127.0.0.1 -p 3000 > /tmp/landing.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3000 >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/landing.log
+          exit 1
+      - name: Capture responsive matrix
+        run: |
+          mkdir -p /tmp/land-0008
+          cat > /tmp/land-0008/audit.mjs <<'EOF'
+          import { chromium } from 'playwright';
+          import fs from 'node:fs';
+
+          const widths = [360, 390, 768, 1280, 1440];
+          const browser = await chromium.launch({ headless: true });
+          const results = [];
+
+          for (const width of widths) {
+            for (const theme of ['light', 'dark']) {
+              const context = await browser.newContext({
+                viewport: { width, height: 1000 },
+                deviceScaleFactor: 1,
+                colorScheme: theme,
+              });
+              const page = await context.newPage();
+              await page.addInitScript(({ theme }) => {
+                localStorage.setItem('portfolio-theme', theme);
+              }, { theme });
+              await page.goto('http://127.0.0.1:3000', { waitUntil: 'networkidle' });
+              await page.evaluate(() => document.fonts.ready);
+
+              const metrics = await page.evaluate(() => {
+                const rect = (selector) => {
+                  const element = document.querySelector(selector);
+                  if (!element) return null;
+                  const box = element.getBoundingClientRect();
+                  return { x: box.x, y: box.y, width: box.width, height: box.height };
+                };
+
+                const sections = ['#hero', '#competencias', '#projetos', '#sobre', '#contato'];
+                return {
+                  viewport: window.innerWidth,
+                  scrollWidth: document.documentElement.scrollWidth,
+                  bodyWidth: document.body.getBoundingClientRect().width,
+                  sections: Object.fromEntries(sections.map((selector) => [selector, rect(selector)])),
+                  heroHeading: rect('#hero h1'),
+                  heroVisual: rect('#hero [aria-hidden="true"]'),
+                  competenciesTitle: rect('#competencias h2'),
+                  projectsTitle: rect('#projetos h2'),
+                  email: rect('#contato a[href^="mailto:"]'),
+                  headerNavVisible: (() => {
+                    const nav = document.querySelector('header nav');
+                    return nav ? getComputedStyle(nav).display !== 'none' : false;
+                  })(),
+                  horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+                };
+              });
+
+              results.push({ width, theme, ...metrics });
+              await page.screenshot({ path: `/tmp/land-0008/${width}-${theme}.png`, fullPage: true });
+              await context.close();
+            }
+          }
+
+          await browser.close();
+          fs.writeFileSync('/tmp/land-0008/metrics.json', JSON.stringify(results, null, 2));
+          console.log(JSON.stringify(results, null, 2));
+
+          if (results.some((item) => item.horizontalOverflow)) {
+            process.exitCode = 2;
+          }
+          EOF
+          node /tmp/land-0008/audit.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: land-0008-responsive-audit
+          path: /tmp/land-0008/
+          retention-days: 1
