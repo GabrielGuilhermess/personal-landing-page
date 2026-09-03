@@ -29,7 +29,7 @@ export default function ProjectsSection() {
           </h2>
         </header>
 
-        <div className="space-y-[72px] md:space-y-[96px]">
+        <div>
           <article aria-labelledby={`${devToolbox.id}-title`}>
             <MediaPreview
               src={devToolbox.imageUrl}
@@ -58,7 +58,7 @@ export default function ProjectsSection() {
 
           <article
             aria-labelledby={`${economiaBrasil.id}-title`}
-            className="grid gap-7 border-t border-[var(--divider)] pt-[72px] md:gap-9 md:pt-[88px] min-[1100px]:grid-cols-[0.7fr_1.3fr] min-[1100px]:items-end min-[1100px]:gap-12"
+            className="mt-10 grid gap-7 border-t border-[var(--divider)] pt-10 md:mt-12 md:gap-9 md:pt-12 min-[1100px]:grid-cols-[0.7fr_1.3fr] min-[1100px]:items-end min-[1100px]:gap-12"
           >
             <div className="min-[1100px]:pb-4">
               <h3
