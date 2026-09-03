@@ -1,0 +1,55 @@
+name: LAND-0009 toolchain migration scratch
+
+on:
+  push:
+    branches:
+      - chore/LAND-0009-toolchain-scratch
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+      - name: Install pinned pnpm
+        run: npm install --global pnpm@10.26.0
+      - name: Pin direct dependencies and toolchain
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          for (const group of ['dependencies', 'devDependencies']) {
+            for (const name of Object.keys(pkg[group] ?? {})) {
+              const entry = lock.packages[`node_modules/${name}`];
+              if (!entry?.version) throw new Error(`Missing resolved version for ${name}`);
+              pkg[group][name] = entry.version;
+            }
+          }
+          pkg.packageManager = 'pnpm@10.26.0';
+          pkg.engines = { node: '24.x' };
+          fs.writeFileSync('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
+          fs.writeFileSync('.nvmrc', '24.20.0\n');
+          fs.writeFileSync('.node-version', '24.20.0\n');
+          fs.writeFileSync('.npmrc', 'save-exact=true\nengine-strict=true\n');
+          NODE
+      - name: Generate pnpm lockfile
+        run: |
+          pnpm import
+          pnpm install --lockfile-only
+      - name: Show toolchain
+        run: |
+          node --version
+          pnpm --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: land-0009-toolchain
+          path: |
+            package.json
+            pnpm-lock.yaml
+            .nvmrc
+            .node-version
+            .npmrc
+          retention-days: 1
