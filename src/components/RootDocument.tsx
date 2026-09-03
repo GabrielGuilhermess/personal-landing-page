@@ -29,10 +29,8 @@ export default function RootDocument({ children, lang }: RootDocumentProps) {
       suppressHydrationWarning
       className={`${instrumentSans.variable} ${ibmPlexMono.variable}`}
     >
-      <head>
-        <ThemeScript />
-      </head>
       <body className="font-body">
+        <ThemeScript />
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
