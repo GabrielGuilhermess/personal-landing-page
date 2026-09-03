@@ -33,6 +33,5 @@ export interface PersonalInfo {
   name: string;
   role: string;
   bio: string;
-  location: string;
   email: string;
 }

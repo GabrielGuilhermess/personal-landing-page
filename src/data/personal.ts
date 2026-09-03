@@ -1,10 +1,9 @@
 import type { PersonalInfo, SocialLink } from "@/types";
 
 export const PERSONAL: PersonalInfo = {
-  name: "Gabriel Guilherme Santos da Silva",
-  role: "Desenvolvedor de Software | Full-stack",
-  bio: "Desenvolvedor de software full-stack com atuação em integrações entre sistemas, APIs, relatórios e manutenção evolutiva em contextos corporativos.\n\nExperiência prática em modernização incremental de legados, fluxos operacionais e rotinas de entrega contínua, utilizando Java, Spring Boot, PostgreSQL, ZK, React, Node.js e JavaScript conforme o contexto de cada projeto.",
-  location: "Brasil",
+  name: "Gabriel Guilherme",
+  role: "Software Engineer",
+  bio: "Construo software com interesse tanto na engenharia por trás da aplicação quanto na experiência final de quem a utiliza.\n\nTenho especial interesse em sistemas que precisam ser evoluídos, observados e mantidos ao longo do tempo.",
   email: "gabrielguilhermebcc@gmail.com",
 };
 

@@ -1,28 +1,31 @@
-import { MapPin } from "lucide-react";
 import { PERSONAL } from "@/data/personal";
-import { SectionHeading } from "@/design-system/components";
+import { Container } from "@/design-system/components";
 
 export default function AboutSection() {
   const paragraphs = PERSONAL.bio.split("\n\n");
 
   return (
-    <section id="sobre" className="section-container py-20 md:py-28">
-      <div className="space-y-10">
-        <SectionHeading align="center" label="Sobre" title="Integrações, APIs e manutenção evolutiva" />
-        <div className="mx-auto max-w-4xl space-y-6">
-          <div className="mx-auto max-w-3xl space-y-4 text-left text-base leading-8 text-[var(--text-secondary)]">
-            {paragraphs.map((paragraph) => (
-              <p key={paragraph}>{paragraph}</p>
-            ))}
-          </div>
-          <div className="flex justify-center">
-            <div className="inline-flex items-center gap-3 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
-              <MapPin className="h-4 w-4 text-brand-500" />
-              <span>{PERSONAL.location}</span>
-            </div>
-          </div>
+    <section
+      id="sobre"
+      aria-labelledby="sobre-title"
+      className="border-t border-[var(--divider)] py-[72px] md:py-[88px]"
+    >
+      <Container>
+        <header className="mb-8 md:mb-10">
+          <h2
+            id="sobre-title"
+            className="text-[30px] font-semibold leading-[1.1] tracking-[-0.035em] text-[var(--text)] md:text-[34px]"
+          >
+            Sobre
+          </h2>
+        </header>
+
+        <div className="max-w-[760px] space-y-5 text-[17px] leading-[1.7] text-[var(--muted)] md:text-[18px]">
+          {paragraphs.map((paragraph) => (
+            <p key={paragraph}>{paragraph}</p>
+          ))}
         </div>
-      </div>
+      </Container>
     </section>
   );
 }
