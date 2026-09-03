@@ -1,4 +1,4 @@
-const themeScript = `(function(){var t=localStorage.getItem("portfolio-theme");if(!t)t=matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light";document.documentElement.classList.toggle("dark",t==="dark")})()`;
+const themeScript = `(function(){var t;try{t=localStorage.getItem("portfolio-theme")}catch(e){}if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light";var r=document.documentElement;r.classList.toggle("dark",t==="dark");r.style.colorScheme=t})()`;
 
 export default function ThemeScript() {
   return <script dangerouslySetInnerHTML={{ __html: themeScript }} />;
