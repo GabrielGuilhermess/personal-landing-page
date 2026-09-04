@@ -6,7 +6,7 @@ on:
       - chore/LAND-0009-final-clean-gate
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   gate:
@@ -167,3 +167,45 @@ jobs:
             outdated.json
           include-hidden-files: true
           retention-days: 1
+
+      - name: Publish validated state to LAND-0009 work branch
+        if: success()
+        env:
+          TARGET_BRANCH: test/LAND-0009-accessibility-locale-performance
+          EXPECTED_TARGET_SHA: 6327487dfc05f0e26dcabb39903624114014d68c
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/land9-final/src/design-system/tokens /tmp/land9-final/src/design-system/components
+          cp package.json pnpm-lock.yaml pnpm-workspace.yaml eslint.config.mjs .nvmrc .node-version .npmrc /tmp/land9-final/
+          cp src/design-system/tokens/animations.ts /tmp/land9-final/src/design-system/tokens/animations.ts
+          cp src/design-system/components/index.ts /tmp/land9-final/src/design-system/components/index.ts
+
+          git fetch origin "$TARGET_BRANCH"
+          actual_target_sha="$(git rev-parse FETCH_HEAD)"
+          if [ "$actual_target_sha" != "$EXPECTED_TARGET_SHA" ]; then
+            echo "Target branch changed: expected $EXPECTED_TARGET_SHA, got $actual_target_sha"
+            exit 1
+          fi
+
+          git checkout -B "$TARGET_BRANCH" "$actual_target_sha"
+          cp /tmp/land9-final/package.json ./package.json
+          cp /tmp/land9-final/pnpm-lock.yaml ./pnpm-lock.yaml
+          cp /tmp/land9-final/pnpm-workspace.yaml ./pnpm-workspace.yaml
+          cp /tmp/land9-final/eslint.config.mjs ./eslint.config.mjs
+          cp /tmp/land9-final/.nvmrc ./.nvmrc
+          cp /tmp/land9-final/.node-version ./.node-version
+          cp /tmp/land9-final/.npmrc ./.npmrc
+          cp /tmp/land9-final/src/design-system/tokens/animations.ts ./src/design-system/tokens/animations.ts
+          cp /tmp/land9-final/src/design-system/components/index.ts ./src/design-system/components/index.ts
+          rm -f package-lock.json .eslintrc.json src/design-system/components/SkillIcon.tsx
+
+          git add -A package.json package-lock.json pnpm-lock.yaml pnpm-workspace.yaml eslint.config.mjs .eslintrc.json .nvmrc .node-version .npmrc src/design-system/tokens/animations.ts src/design-system/components/index.ts src/design-system/components/SkillIcon.tsx
+          if git diff --cached --quiet; then
+            echo "No changes to publish."
+            exit 0
+          fi
+
+          git config user.name "Gabriel Guilherme Santos da Silva"
+          git config user.email "gabrielguilhermebcc@gmail.com"
+          git commit -m "chore(toolchain): finalize LAND-0009 dependency baseline"
+          git push origin HEAD:"$TARGET_BRANCH"
