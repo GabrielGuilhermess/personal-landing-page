@@ -1,0 +1,329 @@
+name: LAND-0010 final QA
+
+on:
+  push:
+    branches:
+      - test/LAND-0010-final-qa-audit
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.20.0
+          package-manager-cache: false
+
+      - name: Install pinned pnpm
+        run: npm install --global pnpm@11.25.0
+
+      - name: Frozen install
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify pinned toolchain
+        run: |
+          node --version
+          pnpm --version
+          pnpm exec next --version
+          pnpm exec eslint --version
+          pnpm exec tsc --version
+          node <<'NODE'
+          const pkg = require('./package.json');
+          if (pkg.packageManager !== 'pnpm@11.25.0') throw new Error(`Unexpected packageManager: ${pkg.packageManager}`);
+          if (pkg.engines?.node !== '24.x') throw new Error(`Unexpected Node engine: ${pkg.engines?.node}`);
+          if (pkg.engines?.pnpm !== '11.25.0') throw new Error(`Unexpected pnpm engine: ${pkg.engines?.pnpm}`);
+          for (const group of ['dependencies', 'devDependencies']) {
+            for (const [name, version] of Object.entries(pkg[group] ?? {})) {
+              if (!/^\d+\.\d+\.\d+(?:[-+].+)?$/.test(version)) throw new Error(`${group}.${name} is not exactly pinned: ${version}`);
+            }
+          }
+          NODE
+
+      - name: Lint
+        run: |
+          start=$(date +%s%3N)
+          pnpm lint
+          end=$(date +%s%3N)
+          echo "LINT_MS=$((end-start))" >> "$GITHUB_ENV"
+
+      - name: Production build
+        run: |
+          start=$(date +%s%3N)
+          pnpm build
+          end=$(date +%s%3N)
+          echo "BUILD_MS=$((end-start))" >> "$GITHUB_ENV"
+
+      - name: Verify build leaves tracked state clean
+        run: git diff --exit-code
+
+      - name: Security scan
+        run: |
+          docker run --rm \
+            -v "${PWD}:/src" \
+            ghcr.io/google/osv-scanner@sha256:5116601dedc01c1c580eb92371883ec052fc4c13c3fbc109d621a63ac416d475 \
+            scan -L /src/pnpm-lock.yaml --format json --output-file /src/osv.json
+
+      - name: Audit source reachability and legacy residue
+        run: |
+          mkdir -p qa-results
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = process.cwd();
+          const src = path.join(root, 'src');
+          const exts = ['.ts', '.tsx', '.js', '.jsx'];
+          const files = [];
+          function walk(dir) {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const p = path.join(dir, entry.name);
+              if (entry.isDirectory()) walk(p);
+              else if (exts.includes(path.extname(entry.name))) files.push(p);
+            }
+          }
+          walk(src);
+          const norm = p => path.relative(root, p).replaceAll(path.sep, '/');
+          const fileSet = new Set(files.map(p => path.resolve(p)));
+          function resolveImport(from, spec) {
+            let base;
+            if (spec.startsWith('@/')) base = path.join(src, spec.slice(2));
+            else if (spec.startsWith('.')) base = path.resolve(path.dirname(from), spec);
+            else return null;
+            const candidates = [base, ...exts.map(e => base + e), ...exts.map(e => path.join(base, 'index' + e))];
+            return candidates.find(c => fileSet.has(path.resolve(c))) || null;
+          }
+          const graph = new Map();
+          const re = /(?:import|export)\s+(?:type\s+)?(?:[^'";]*?\s+from\s+)?['"]([^'"]+)['"]|import\(['"]([^'"]+)['"]\)/g;
+          for (const file of files) {
+            const text = fs.readFileSync(file, 'utf8');
+            const deps = [];
+            let m;
+            while ((m = re.exec(text))) {
+              const dep = resolveImport(file, m[1] || m[2]);
+              if (dep) deps.push(path.resolve(dep));
+            }
+            graph.set(path.resolve(file), deps);
+          }
+          const entries = files.filter(f => /src\/app\/.*\/(?:page|layout)\.(?:ts|tsx)$/.test(norm(f)) || /src\/app\/(?:page|layout)\.(?:ts|tsx)$/.test(norm(f)));
+          const reachable = new Set();
+          function visit(file) {
+            file = path.resolve(file);
+            if (reachable.has(file)) return;
+            reachable.add(file);
+            for (const dep of graph.get(file) || []) visit(dep);
+          }
+          entries.forEach(visit);
+          const unreachable = files.filter(f => !reachable.has(path.resolve(f))).map(norm).sort();
+          const reachableText = [...reachable].map(f => fs.readFileSync(f, 'utf8')).join('\n');
+          const publicFiles = [];
+          function walkPublic(dir) {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const p = path.join(dir, entry.name);
+              if (entry.isDirectory()) walkPublic(p); else publicFiles.push(p);
+            }
+          }
+          walkPublic(path.join(root, 'public'));
+          const unusedAssets = publicFiles.filter(f => {
+            const rel = '/' + path.relative(path.join(root, 'public'), f).replaceAll(path.sep, '/');
+            return !reachableText.includes(rel) && !reachableText.includes(path.basename(f));
+          }).map(f => path.relative(root, f).replaceAll(path.sep, '/')).sort();
+          const patterns = [
+            ['old-font-sora', /Sora/gi], ['old-font-outfit', /Outfit/gi], ['old-font-jetbrains', /JetBrains\s*Mono/gi],
+            ['gradient', /(?:bg-gradient|from-|via-|to-)/g], ['glass', /(?:backdrop-blur|glass)/gi],
+            ['large-radius', /rounded-(?:2xl|3xl|full)/g], ['shadow-utility', /shadow-(?:sm|md|lg|xl|2xl)/g]
+          ];
+          const legacyHits = [];
+          for (const file of [...reachable].sort()) {
+            const text = fs.readFileSync(file, 'utf8');
+            for (const [name, pattern] of patterns) {
+              const matches = text.match(pattern);
+              if (matches?.length) legacyHits.push({ file: norm(file), pattern: name, count: matches.length });
+            }
+          }
+          const result = { entrypoints: entries.map(norm).sort(), reachableCount: reachable.size, sourceFileCount: files.length, unreachable, unusedAssets, legacyHits };
+          fs.writeFileSync('qa-results/source-audit.json', JSON.stringify(result, null, 2));
+          console.log(JSON.stringify(result, null, 2));
+          NODE
+
+      - name: Install browser QA tooling
+        run: |
+          mkdir -p /tmp/land-qa
+          cd /tmp/land-qa
+          npm init -y >/dev/null
+          PLAYWRIGHT_VERSION="$(npm view playwright version)"
+          AXE_VERSION="$(npm view axe-core version)"
+          npm install --save-exact "playwright@${PLAYWRIGHT_VERSION}" "axe-core@${AXE_VERSION}"
+          echo "PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION}" >> "$GITHUB_ENV"
+          echo "AXE_VERSION=${AXE_VERSION}" >> "$GITHUB_ENV"
+          ./node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Run 20-state visual, accessibility and interaction matrix
+        run: |
+          cat > /tmp/land-qa/qa.cjs <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const http = require('node:http');
+          const { chromium } = require('playwright');
+          const axeSource = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
+          const root = process.env.GITHUB_WORKSPACE;
+          const out = path.join(root, 'out');
+          const resultDir = path.join(root, 'qa-results');
+          const shotDir = path.join(resultDir, 'screenshots');
+          fs.mkdirSync(shotDir, { recursive: true });
+          const mime = { '.html':'text/html; charset=utf-8', '.js':'text/javascript', '.css':'text/css', '.json':'application/json', '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.svg':'image/svg+xml', '.ico':'image/x-icon', '.woff':'font/woff', '.woff2':'font/woff2' };
+          const server = http.createServer((req, res) => {
+            const clean = decodeURIComponent((req.url || '/').split('?')[0]);
+            const rel = clean.replace(/^\/+/, '');
+            const candidates = clean === '/' ? [path.join(out, 'index.html')] : [path.join(out, rel), path.join(out, rel + '.html'), path.join(out, rel, 'index.html')];
+            const file = candidates.find(p => fs.existsSync(p) && fs.statSync(p).isFile());
+            if (!file || !path.resolve(file).startsWith(path.resolve(out))) { res.writeHead(404); return res.end('Not found'); }
+            res.writeHead(200, { 'content-type': mime[path.extname(file)] || 'application/octet-stream' });
+            fs.createReadStream(file).pipe(res);
+          });
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          (async () => {
+            await new Promise(resolve => server.listen(4173, '127.0.0.1', resolve));
+            const browser = await chromium.launch({ headless: true });
+            const widths = [{w:360,h:800},{w:390,h:844},{w:768,h:1024},{w:1280,h:900},{w:1440,h:1000}];
+            const locales = ['pt','en'];
+            const themes = ['light','dark'];
+            const matrix = [];
+            const externalLinks = new Set();
+            for (const locale of locales) {
+              for (const theme of themes) {
+                for (const {w,h} of widths) {
+                  const context = await browser.newContext({ viewport: { width:w, height:h }, colorScheme: theme === 'dark' ? 'dark' : 'light' });
+                  await context.addInitScript(t => localStorage.setItem('portfolio-theme', t), theme);
+                  const page = await context.newPage();
+                  const consoleErrors = [];
+                  page.on('console', msg => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
+                  page.on('pageerror', err => consoleErrors.push(err.message));
+                  const response = await page.goto(`http://127.0.0.1:4173/${locale}`, { waitUntil:'networkidle' });
+                  assert(response && response.status() === 200, `${locale}/${theme}/${w}: HTTP ${response?.status()}`);
+                  const state = await page.evaluate(({locale,theme}) => ({
+                    lang: document.documentElement.lang,
+                    dark: document.documentElement.classList.contains('dark'),
+                    scrollWidth: document.documentElement.scrollWidth,
+                    innerWidth: window.innerWidth,
+                    h1: document.querySelectorAll('h1').length,
+                    main: !!document.querySelector('main#main-content'),
+                    missingAnchors: [...document.querySelectorAll('a[href^="#"]')].map(a=>a.getAttribute('href')).filter(h=>h && h.length>1 && !document.querySelector(h)),
+                    brokenImages: [...document.images].filter(i=>!i.complete || i.naturalWidth===0).map(i=>i.currentSrc || i.src),
+                    external: [...document.querySelectorAll('a[href^="http"]')].map(a=>a.href),
+                    details: document.querySelectorAll('details').length,
+                    theme,
+                    locale,
+                  }), {locale,theme});
+                  state.external.forEach(href => externalLinks.add(href));
+                  assert(state.lang.toLowerCase().startsWith(locale), `${locale}/${theme}/${w}: lang=${state.lang}`);
+                  assert(state.dark === (theme === 'dark'), `${locale}/${theme}/${w}: theme mismatch`);
+                  assert(state.scrollWidth <= state.innerWidth + 1, `${locale}/${theme}/${w}: horizontal overflow ${state.scrollWidth}/${state.innerWidth}`);
+                  assert(state.h1 === 1, `${locale}/${theme}/${w}: expected exactly one h1, got ${state.h1}`);
+                  assert(state.main, `${locale}/${theme}/${w}: missing main#main-content`);
+                  assert(state.missingAnchors.length === 0, `${locale}/${theme}/${w}: missing anchors ${state.missingAnchors.join(',')}`);
+                  assert(state.brokenImages.length === 0, `${locale}/${theme}/${w}: broken images ${state.brokenImages.join(',')}`);
+                  await page.addScriptTag({ content: axeSource });
+                  const axe = await page.evaluate(async () => await axe.run(document, { runOnly: { type:'tag', values:['wcag2a','wcag2aa','wcag21a','wcag21aa'] } }));
+                  assert(axe.violations.length === 0, `${locale}/${theme}/${w}: axe violations ${axe.violations.map(v=>v.id).join(',')}`);
+                  assert(consoleErrors.length === 0, `${locale}/${theme}/${w}: console errors ${consoleErrors.join(' | ')}`);
+                  const perf = await page.evaluate(() => {
+                    const nav = performance.getEntriesByType('navigation')[0];
+                    const resources = performance.getEntriesByType('resource');
+                    return { duration: nav?.duration ?? null, resources: resources.length, transferSize: resources.reduce((s,r)=>s+(r.transferSize||0),0) };
+                  });
+                  const file = `${locale}-${theme}-${w}.png`;
+                  await page.screenshot({ path:path.join(shotDir,file), fullPage:true });
+                  matrix.push({ locale, theme, width:w, height:h, axeViolations:0, consoleErrors:0, overflow:false, details:state.details, performance:perf, screenshot:file });
+                  await context.close();
+                }
+              }
+            }
+            // Keyboard + skip-link + disclosure + theme persistence smoke.
+            const context = await browser.newContext({ viewport:{width:390,height:844}, colorScheme:'light' });
+            await context.addInitScript(() => localStorage.setItem('portfolio-theme','light'));
+            const page = await context.newPage();
+            await page.goto('http://127.0.0.1:4173/pt', { waitUntil:'networkidle' });
+            await page.keyboard.press('Tab');
+            assert(await page.evaluate(() => document.activeElement?.getAttribute('href')) === '#main-content', 'Skip link is not first keyboard target');
+            await page.keyboard.press('Enter');
+            assert(await page.evaluate(() => document.activeElement?.id) === 'main-content', 'Skip link did not focus main content');
+            const details = page.locator('details');
+            assert(await details.count() >= 1, 'Expected disclosure details');
+            const firstSummary = details.first().locator('summary');
+            await firstSummary.focus();
+            await page.keyboard.press('Enter');
+            assert(await details.first().evaluate(el => el.open), 'Disclosure did not open from keyboard');
+            const themeButton = page.locator('button[aria-label]').filter({ has: page.locator('svg') }).last();
+            const beforeDark = await page.evaluate(() => document.documentElement.classList.contains('dark'));
+            await themeButton.click();
+            await page.waitForTimeout(50);
+            const afterDark = await page.evaluate(() => document.documentElement.classList.contains('dark'));
+            assert(beforeDark !== afterDark, 'Theme control did not toggle theme');
+            await page.reload({ waitUntil:'networkidle' });
+            assert(await page.evaluate(() => document.documentElement.classList.contains('dark')) === afterDark, 'Theme did not persist across reload');
+            await context.close();
+            // Browser-language root routing.
+            for (const [browserLocale, expected] of [['pt-BR','pt'],['en-US','en']]) {
+              const c = await browser.newContext({ locale: browserLocale, viewport:{width:390,height:844} });
+              const p = await c.newPage();
+              await p.goto('http://127.0.0.1:4173/', { waitUntil:'domcontentloaded' });
+              await p.waitForURL(`**/${expected}`, { timeout:5000 });
+              assert(new URL(p.url()).pathname === `/${expected}`, `${browserLocale}: root did not route to /${expected}`);
+              await c.close();
+            }
+            await browser.close();
+            server.close();
+            fs.writeFileSync(path.join(resultDir,'browser-qa.json'), JSON.stringify({ matrix, externalLinks:[...externalLinks].sort(), playwright:process.env.PLAYWRIGHT_VERSION, axe:process.env.AXE_VERSION }, null, 2));
+          })().catch(err => { console.error(err); server.close(); process.exit(1); });
+          NODE
+          cd /tmp/land-qa
+          node qa.cjs
+
+      - name: Verify project links and local project assets
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const qa = JSON.parse(fs.readFileSync('qa-results/browser-qa.json','utf8'));
+          const links = qa.externalLinks;
+          const projectLinks = links.filter(h => /devtoolbox|economia|github\.com\/GabrielGuilhermess/i.test(h));
+          if (!projectLinks.length) throw new Error('No project links discovered');
+          fs.writeFileSync('qa-results/project-links.txt', projectLinks.join('\n') + '\n');
+          NODE
+          while IFS= read -r url; do
+            code=$(curl -L --max-time 20 --retry 1 -A 'LAND-0010-QA/1.0' -s -o /dev/null -w '%{http_code}' "$url" || true)
+            echo "$code $url" | tee -a qa-results/project-link-status.txt
+            case "$code" in 2*|3*) ;; *) echo "Project link failed: $code $url" >&2; exit 1;; esac
+          done < qa-results/project-links.txt
+          test -s public/images/projects/devtoolbox-2026-09-02.png
+          test -s public/images/projects/economia-brasil-2026-09-02.png
+
+      - name: Report static output size
+        run: |
+          du -sh out | tee qa-results/output-size.txt
+          find out/_next/static -type f -printf '%s %p\n' 2>/dev/null | sort -nr | head -20 | tee qa-results/largest-static-assets.txt || true
+
+      - name: Gate summary
+        if: always()
+        run: |
+          echo "Lint: ${LINT_MS:-not-completed} ms"
+          echo "Build: ${BUILD_MS:-not-completed} ms"
+          echo "Node: $(node --version)"
+          echo "pnpm: $(pnpm --version)"
+          echo "Playwright: ${PLAYWRIGHT_VERSION:-not-installed}"
+          echo "axe-core: ${AXE_VERSION:-not-installed}"
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: land-0010-final-qa
+          path: |
+            qa-results
+            osv.json
+          retention-days: 2
