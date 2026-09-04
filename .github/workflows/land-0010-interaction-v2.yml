@@ -1,0 +1,82 @@
+name: LAND-0010 interaction validation
+
+on:
+  push:
+    branches:
+      - test/LAND-0010-interaction-v2
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+      PLAYWRIGHT_VERSION: 1.62.1
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.20.0
+          package-manager-cache: false
+      - name: Install pinned pnpm
+        run: npm install --global pnpm@11.25.0
+      - name: Build
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+      - name: Install browser tool
+        run: |
+          mkdir -p /tmp/land-interaction && cd /tmp/land-interaction
+          npm init -y >/dev/null
+          npm install --save-exact "playwright@${PLAYWRIGHT_VERSION}"
+          echo "CHROME_PATH=$(which google-chrome || which google-chrome-stable)" >> "$GITHUB_ENV"
+      - name: Validate theme persistence and locale routing
+        run: |
+          cat > /tmp/land-interaction/check.cjs <<'NODE'
+          const fs=require('node:fs'),path=require('node:path'),http=require('node:http');
+          const {chromium}=require('playwright');
+          const root=process.env.GITHUB_WORKSPACE,out=path.join(root,'out');
+          const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.woff':'font/woff','.woff2':'font/woff2'};
+          const server=http.createServer((req,res)=>{const clean=decodeURIComponent((req.url||'/').split('?')[0]),rel=clean.replace(/^\/+/,''),cs=clean==='/'?[path.join(out,'index.html')]:[path.join(out,rel),path.join(out,rel+'.html'),path.join(out,rel,'index.html')],f=cs.find(p=>fs.existsSync(p)&&fs.statSync(p).isFile());if(!f){res.writeHead(404);return res.end('Not found')}res.writeHead(200,{'content-type':mime[path.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(res)});
+          const ok=(v,m)=>{if(!v)throw new Error(m)};
+          (async()=>{
+            await new Promise(r=>server.listen(4173,'127.0.0.1',r));
+            const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH});
+            const context=await browser.newContext({viewport:{width:390,height:844},colorScheme:'light'});
+            await context.addInitScript(()=>{if(!localStorage.getItem('portfolio-theme'))localStorage.setItem('portfolio-theme','light')});
+            const page=await context.newPage();
+            await page.goto('http://127.0.0.1:4173/pt',{waitUntil:'networkidle'});
+            ok(await page.evaluate(()=>localStorage.getItem('portfolio-theme'))==='light','initial storage is not light');
+            ok(!(await page.evaluate(()=>document.documentElement.classList.contains('dark'))),'initial theme is not light');
+            const buttons=page.locator('button[aria-label]');
+            let toggled=false;
+            for(let i=0;i<await buttons.count();i++){
+              const before=await page.evaluate(()=>document.documentElement.classList.contains('dark'));
+              await buttons.nth(i).click().catch(()=>{});
+              await page.waitForTimeout(75);
+              const after=await page.evaluate(()=>document.documentElement.classList.contains('dark'));
+              if(before!==after){toggled=true;break}
+            }
+            ok(toggled,'theme control did not toggle');
+            await page.waitForFunction(()=>localStorage.getItem('portfolio-theme')==='dark');
+            ok(await page.evaluate(()=>document.documentElement.classList.contains('dark')),'dark class missing after toggle');
+            await page.reload({waitUntil:'networkidle'});
+            ok(await page.evaluate(()=>localStorage.getItem('portfolio-theme'))==='dark','stored theme did not persist');
+            ok(await page.evaluate(()=>document.documentElement.classList.contains('dark')),'dark theme did not persist after reload');
+            await context.close();
+            for(const [browserLocale,expected] of [['pt-BR','pt'],['en-US','en']]){
+              const c=await browser.newContext({locale:browserLocale,viewport:{width:390,height:844}}),p=await c.newPage();
+              await p.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded'});
+              await p.waitForURL(`**/${expected}`,{timeout:5000});
+              ok(new URL(p.url()).pathname===`/${expected}`,`${browserLocale} did not route to /${expected}`);
+              await c.close();
+            }
+            await browser.close();server.close();
+            console.log('INTERACTION_PASS=theme-persistence,pt-BR,en-US');
+          })().catch(e=>{console.error(e);server.close();process.exit(1)});
+          NODE
+          cd /tmp/land-interaction
+          node check.cjs
