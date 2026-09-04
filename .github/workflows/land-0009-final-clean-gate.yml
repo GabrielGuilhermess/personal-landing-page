@@ -75,6 +75,7 @@ jobs:
             @types/react-dom@19 \
             postcss@latest \
             autoprefixer@latest
+          pnpm remove framer-motion lucide-react
           rm package-lock.json
           cat > eslint.config.mjs <<'EOF'
           import { defineConfig, globalIgnores } from "eslint/config";

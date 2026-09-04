@@ -20,7 +20,6 @@ export { default as Card } from "./Card";
 export { default as Input } from "./Input";
 export { default as LinkButton } from "./LinkButton";
 export { default as SectionHeading } from "./SectionHeading";
-export { default as SkillIcon } from "./SkillIcon";
 export { default as Textarea } from "./Textarea";
 export { default as ThemeToggle } from "./ThemeToggle";
 
