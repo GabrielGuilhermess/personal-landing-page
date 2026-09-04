@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { cn } from "@/design-system/lib/utils";
 import { useTheme, type Theme } from "@/design-system/providers/ThemeProvider";
 
@@ -21,6 +21,8 @@ const DEFAULT_LABELS: ThemeControlLabels = {
   activateDark: "Enable dark theme",
 };
 
+const subscribeToHydration = () => () => {};
+
 function ThemeGlyph({ theme }: { theme: Theme }) {
   if (theme === "dark") {
     return (
@@ -39,12 +41,14 @@ function ThemeGlyph({ theme }: { theme: Theme }) {
 
 export default function ThemeControl({ className, labels = DEFAULT_LABELS }: ThemeControlProps) {
   const { theme, toggleTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
+  const hydrated = useSyncExternalStore(subscribeToHydration, () => true, () => false);
 
-  useEffect(() => { setMounted(true); }, []);
-
-  const targetTheme: Theme = mounted && theme === "dark" ? "light" : "dark";
-  const label = mounted ? (targetTheme === "dark" ? labels.activateDark : labels.activateLight) : labels.toggle;
+  const targetTheme: Theme = hydrated && theme === "dark" ? "light" : "dark";
+  const label = hydrated
+    ? targetTheme === "dark"
+      ? labels.activateDark
+      : labels.activateLight
+    : labels.toggle;
 
   return (
     <button type="button" onClick={toggleTheme} aria-label={label} title={label} className={cn("inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] border border-[var(--divider)] bg-transparent text-[var(--muted)] transition-colors duration-[var(--motion-fast)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]", className)}>
