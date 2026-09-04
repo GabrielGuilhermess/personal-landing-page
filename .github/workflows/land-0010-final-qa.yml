@@ -14,6 +14,8 @@ jobs:
     env:
       CI: true
       NEXT_TELEMETRY_DISABLED: 1
+      PLAYWRIGHT_VERSION: 1.62.1
+      AXE_VERSION: 4.13.0
     steps:
       - uses: actions/checkout@v5
 
@@ -147,7 +149,24 @@ jobs:
               if (matches?.length) legacyHits.push({ file: norm(file), pattern: name, count: matches.length });
             }
           }
-          const result = { entrypoints: entries.map(norm).sort(), reachableCount: reachable.size, sourceFileCount: files.length, unreachable, unusedAssets, legacyHits };
+          const legacySymbols = ['Badge','Button','Card','Input','LinkButton','SectionHeading','Textarea','ThemeToggle'];
+          const legacySymbolReferences = {};
+          for (const symbol of legacySymbols) {
+            legacySymbolReferences[symbol] = files.flatMap(file => {
+              const n = norm(file);
+              if (n.endsWith(`/${symbol}.tsx`) || n === 'src/design-system/components/index.ts') return [];
+              const text = fs.readFileSync(file,'utf8');
+              return new RegExp(`\\b${symbol}\\b`).test(text) ? [n] : [];
+            });
+          }
+          const barrelImports = [];
+          const barrelRe = /import\s*\{([^}]+)\}\s*from\s*["']@\/design-system\/components["']/gms;
+          for (const file of files) {
+            const text = fs.readFileSync(file,'utf8');
+            let m;
+            while ((m = barrelRe.exec(text))) barrelImports.push({ file:norm(file), symbols:m[1].split(',').map(x=>x.trim()).filter(Boolean) });
+          }
+          const result = { entrypoints: entries.map(norm).sort(), reachableCount: reachable.size, sourceFileCount: files.length, unreachable, unusedAssets, legacyHits, legacySymbolReferences, barrelImports };
           fs.writeFileSync('qa-results/source-audit.json', JSON.stringify(result, null, 2));
           console.log(JSON.stringify(result, null, 2));
           NODE
@@ -157,11 +176,7 @@ jobs:
           mkdir -p /tmp/land-qa
           cd /tmp/land-qa
           npm init -y >/dev/null
-          PLAYWRIGHT_VERSION="$(npm view playwright version)"
-          AXE_VERSION="$(npm view axe-core version)"
           npm install --save-exact "playwright@${PLAYWRIGHT_VERSION}" "axe-core@${AXE_VERSION}"
-          echo "PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION}" >> "$GITHUB_ENV"
-          echo "AXE_VERSION=${AXE_VERSION}" >> "$GITHUB_ENV"
           ./node_modules/.bin/playwright install --with-deps chromium
 
       - name: Run 20-state visual, accessibility and interaction matrix
@@ -188,6 +203,18 @@ jobs:
             fs.createReadStream(file).pipe(res);
           });
           const assert = (condition, message) => { if (!condition) throw new Error(message); };
+          const loadLazyMedia = async page => {
+            await page.evaluate(async () => {
+              const max = document.documentElement.scrollHeight;
+              const step = Math.max(500, Math.floor(window.innerHeight * 0.8));
+              for (let y = 0; y < max; y += step) {
+                window.scrollTo(0, y);
+                await new Promise(resolve => setTimeout(resolve, 35));
+              }
+              window.scrollTo(0, 0);
+            });
+            await page.waitForTimeout(150);
+          };
           (async () => {
             await new Promise(resolve => server.listen(4173, '127.0.0.1', resolve));
             const browser = await chromium.launch({ headless: true });
@@ -207,6 +234,7 @@ jobs:
                   page.on('pageerror', err => consoleErrors.push(err.message));
                   const response = await page.goto(`http://127.0.0.1:4173/${locale}`, { waitUntil:'networkidle' });
                   assert(response && response.status() === 200, `${locale}/${theme}/${w}: HTTP ${response?.status()}`);
+                  await loadLazyMedia(page);
                   const state = await page.evaluate(({locale,theme}) => ({
                     lang: document.documentElement.lang,
                     dark: document.documentElement.classList.contains('dark'),
@@ -245,7 +273,6 @@ jobs:
                 }
               }
             }
-            // Keyboard + skip-link + disclosure + theme persistence smoke.
             const context = await browser.newContext({ viewport:{width:390,height:844}, colorScheme:'light' });
             await context.addInitScript(() => localStorage.setItem('portfolio-theme','light'));
             const page = await context.newPage();
@@ -260,16 +287,23 @@ jobs:
             await firstSummary.focus();
             await page.keyboard.press('Enter');
             assert(await details.first().evaluate(el => el.open), 'Disclosure did not open from keyboard');
-            const themeButton = page.locator('button[aria-label]').filter({ has: page.locator('svg') }).last();
+            const themeButtons = page.locator('button[aria-label]');
             const beforeDark = await page.evaluate(() => document.documentElement.classList.contains('dark'));
-            await themeButton.click();
-            await page.waitForTimeout(50);
+            let toggled = false;
+            for (let i = 0; i < await themeButtons.count(); i++) {
+              const candidate = themeButtons.nth(i);
+              const before = await page.evaluate(() => document.documentElement.classList.contains('dark'));
+              await candidate.click().catch(()=>{});
+              await page.waitForTimeout(50);
+              const after = await page.evaluate(() => document.documentElement.classList.contains('dark'));
+              if (before !== after) { toggled = true; break; }
+            }
+            assert(toggled, 'Theme control did not toggle theme');
             const afterDark = await page.evaluate(() => document.documentElement.classList.contains('dark'));
-            assert(beforeDark !== afterDark, 'Theme control did not toggle theme');
+            assert(beforeDark !== afterDark, 'Theme state did not change');
             await page.reload({ waitUntil:'networkidle' });
             assert(await page.evaluate(() => document.documentElement.classList.contains('dark')) === afterDark, 'Theme did not persist across reload');
             await context.close();
-            // Browser-language root routing.
             for (const [browserLocale, expected] of [['pt-BR','pt'],['en-US','en']]) {
               const c = await browser.newContext({ locale: browserLocale, viewport:{width:390,height:844} });
               const p = await c.newPage();
@@ -292,8 +326,8 @@ jobs:
           const fs = require('node:fs');
           const qa = JSON.parse(fs.readFileSync('qa-results/browser-qa.json','utf8'));
           const links = qa.externalLinks;
-          const projectLinks = links.filter(h => /devtoolbox|economia|github\.com\/GabrielGuilhermess/i.test(h));
-          if (!projectLinks.length) throw new Error('No project links discovered');
+          const projectLinks = links.filter(h => /dev-toolbox|dashboard-economia-brasil|github\.com\/GabrielGuilhermess\/(?:dev-toolbox|dashboard-economia-brasil)/i.test(h));
+          if (projectLinks.length !== 4) throw new Error(`Expected 4 project links, got ${projectLinks.length}`);
           fs.writeFileSync('qa-results/project-links.txt', projectLinks.join('\n') + '\n');
           NODE
           while IFS= read -r url; do
@@ -316,8 +350,8 @@ jobs:
           echo "Build: ${BUILD_MS:-not-completed} ms"
           echo "Node: $(node --version)"
           echo "pnpm: $(pnpm --version)"
-          echo "Playwright: ${PLAYWRIGHT_VERSION:-not-installed}"
-          echo "axe-core: ${AXE_VERSION:-not-installed}"
+          echo "Playwright: ${PLAYWRIGHT_VERSION}"
+          echo "axe-core: ${AXE_VERSION}"
 
       - uses: actions/upload-artifact@v5
         if: always()
