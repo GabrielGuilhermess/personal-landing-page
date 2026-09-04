@@ -1,0 +1,47 @@
+name: LAND-0010 image diagnostic
+
+on:
+  push:
+    branches:
+      - test/LAND-0010-cleanup-qa
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-24.04
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.20.0
+          package-manager-cache: false
+      - name: Install pinned pnpm
+        run: npm install --global pnpm@11.25.0
+      - name: Build static export
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+      - name: Verify exported project media
+        run: |
+          set -euo pipefail
+          for f in \
+            out/images/projects/devtoolbox-2026-09-02.png \
+            out/images/projects/economia-brasil-2026-09-02.png; do
+            test -s "$f"
+            file "$f"
+            sha256sum "$f"
+          done
+          python3 -m http.server 4173 --directory out >/tmp/http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID' EXIT
+          sleep 1
+          curl --fail --silent --show-error --head http://127.0.0.1:4173/images/projects/devtoolbox-2026-09-02.png
+          curl --fail --silent --show-error --head http://127.0.0.1:4173/images/projects/economia-brasil-2026-09-02.png
+          curl --fail --silent --show-error http://127.0.0.1:4173/images/projects/economia-brasil-2026-09-02.png -o /tmp/economia.png
+          cmp out/images/projects/economia-brasil-2026-09-02.png /tmp/economia.png
+          echo "PROJECT_MEDIA_HTTP=PASS"
