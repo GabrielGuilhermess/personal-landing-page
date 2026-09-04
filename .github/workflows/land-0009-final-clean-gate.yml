@@ -133,10 +133,10 @@ jobs:
 
       - name: Security audit
         run: |
-          AUDIT_PNPM_VERSION="$(npx --yes pnpm@10 --version)"
-          echo "Audit engine: pnpm ${AUDIT_PNPM_VERSION}"
-          npx --yes "pnpm@${AUDIT_PNPM_VERSION}" audit --json > audit.json
-          npx --yes "pnpm@${AUDIT_PNPM_VERSION}" audit --audit-level low
+          docker run --rm \
+            -v "${PWD}:/src" \
+            ghcr.io/google/osv-scanner@sha256:5116601dedc01c1c580eb92371883ec052fc4c13c3fbc109d621a63ac416d475 \
+            scan -L /src/pnpm-lock.yaml --format json --output-file /src/osv.json
 
       - name: Dependency freshness report
         if: always()
@@ -162,7 +162,7 @@ jobs:
             .nvmrc
             .node-version
             .npmrc
-            audit.json
+            osv.json
             outdated.json
           include-hidden-files: true
           retention-days: 1
