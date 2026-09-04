@@ -133,8 +133,10 @@ jobs:
 
       - name: Security audit
         run: |
-          pnpm audit --json > audit.json
-          pnpm audit --audit-level low
+          AUDIT_PNPM_VERSION="$(npx --yes pnpm@10 --version)"
+          echo "Audit engine: pnpm ${AUDIT_PNPM_VERSION}"
+          npx --yes "pnpm@${AUDIT_PNPM_VERSION}" audit --json > audit.json
+          npx --yes "pnpm@${AUDIT_PNPM_VERSION}" audit --audit-level low
 
       - name: Dependency freshness report
         if: always()
