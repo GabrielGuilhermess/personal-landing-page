@@ -1,0 +1,139 @@
+name: LAND-0010 cleanup QA
+
+on:
+  push:
+    branches:
+      - test/LAND-0010-cleanup-qa
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+      PLAYWRIGHT_VERSION: 1.62.1
+      AXE_VERSION: 4.13.0
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.20.0
+          package-manager-cache: false
+
+      - name: Install pinned pnpm
+        run: npm install --global pnpm@11.25.0
+
+      - name: Frozen install
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify release policy
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const pkg = require('./package.json');
+          if (process.version !== 'v24.20.0') throw new Error(process.version);
+          if (pkg.packageManager !== 'pnpm@11.25.0' || pkg.engines?.pnpm !== '11.25.0' || pkg.engines?.node !== '24.x') throw new Error('toolchain pins drifted');
+          for (const group of ['dependencies','devDependencies']) for (const [name, version] of Object.entries(pkg[group] ?? {})) if (!/^\d+\.\d+\.\d+(?:[-+].+)?$/.test(version)) throw new Error(`${group}.${name} is not exact: ${version}`);
+          const removed = [
+            'src/data/navigation.ts','src/data/skills.ts','src/design-system/hooks/useMediaQuery.ts','src/design-system/hooks/useScrollspy.ts',
+            'src/design-system/components/Badge.tsx','src/design-system/components/Button.tsx','src/design-system/components/Card.tsx','src/design-system/components/Input.tsx',
+            'src/design-system/components/LinkButton.tsx','src/design-system/components/SectionHeading.tsx','src/design-system/components/Textarea.tsx','src/design-system/components/ThemeToggle.tsx',
+            'public/images/component-showcase.png'
+          ];
+          for (const file of removed) if (fs.existsSync(file)) throw new Error(`legacy residue remains: ${file}`);
+          for (const file of ['src/design-system/tokens/animations.ts','src/design-system/tokens/colors.ts','src/design-system/tokens/fonts.ts','src/design-system/tokens/foundations.ts']) if (!fs.existsSync(file)) throw new Error(`candidate token removed: ${file}`);
+          const barrel = fs.readFileSync('src/design-system/components/index.ts','utf8');
+          for (const symbol of ['Badge','Button','Card','Input','LinkButton','SectionHeading','Textarea','ThemeToggle']) if (new RegExp(`\\b${symbol}\\b`).test(barrel)) throw new Error(`legacy export remains: ${symbol}`);
+          const types = fs.readFileSync('src/types/index.ts','utf8');
+          for (const symbol of ['Project','Skill','SkillCategory','NavItem']) if (new RegExp(`\\b${symbol}\\b`).test(types)) throw new Error(`legacy type remains: ${symbol}`);
+          NODE
+          node --version
+          pnpm --version
+          pnpm exec next --version
+          pnpm exec eslint --version
+          pnpm exec tsc --version
+
+      - name: Lint
+        run: |
+          start=$(date +%s%3N); pnpm lint; end=$(date +%s%3N)
+          echo "LINT_MS=$((end-start))" >> "$GITHUB_ENV"
+
+      - name: Production build
+        run: |
+          start=$(date +%s%3N); pnpm build; end=$(date +%s%3N)
+          echo "BUILD_MS=$((end-start))" >> "$GITHUB_ENV"
+
+      - name: Verify build leaves tracked state clean
+        run: git diff --exit-code
+
+      - name: Security scan
+        run: |
+          docker run --rm -v "${PWD}:/src" ghcr.io/google/osv-scanner@sha256:5116601dedc01c1c580eb92371883ec052fc4c13c3fbc109d621a63ac416d475 scan -L /src/pnpm-lock.yaml --format json --output-file /src/osv.json
+
+      - name: Install browser QA libraries
+        run: |
+          mkdir -p /tmp/land-qa && cd /tmp/land-qa
+          npm init -y >/dev/null
+          npm install --save-exact "playwright@${PLAYWRIGHT_VERSION}" "axe-core@${AXE_VERSION}"
+          CHROME_PATH="$(which google-chrome || which google-chrome-stable || true)"
+          test -n "$CHROME_PATH"
+          echo "CHROME_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+
+      - name: Run full browser matrix
+        run: |
+          mkdir -p qa-results/screenshots
+          cat > /tmp/land-qa/qa.cjs <<'NODE'
+          const fs=require('node:fs'), path=require('node:path'), http=require('node:http');
+          const {chromium}=require('playwright');
+          const axeSource=fs.readFileSync(require.resolve('axe-core/axe.min.js'),'utf8');
+          const root=process.env.GITHUB_WORKSPACE, out=path.join(root,'out'), results=path.join(root,'qa-results'), shots=path.join(results,'screenshots');
+          const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.woff':'font/woff','.woff2':'font/woff2'};
+          const server=http.createServer((req,res)=>{const clean=decodeURIComponent((req.url||'/').split('?')[0]), rel=clean.replace(/^\/+/,''), cs=clean==='/'?[path.join(out,'index.html')]:[path.join(out,rel),path.join(out,rel+'.html'),path.join(out,rel,'index.html')], f=cs.find(p=>fs.existsSync(p)&&fs.statSync(p).isFile()); if(!f||!path.resolve(f).startsWith(path.resolve(out))){res.writeHead(404);return res.end('Not found')} res.writeHead(200,{'content-type':mime[path.extname(f)]||'application/octet-stream'});fs.createReadStream(f).pipe(res)});
+          const ok=(v,m)=>{if(!v)throw new Error(m)};
+          const scrollAll=async p=>{await p.evaluate(async()=>{const h=document.documentElement.scrollHeight,s=Math.max(400,Math.floor(innerHeight*.7));for(let y=0;y<h;y+=s){scrollTo(0,y);await new Promise(r=>setTimeout(r,30))}scrollTo(0,0)});await p.waitForTimeout(100)};
+          (async()=>{await new Promise(r=>server.listen(4173,'127.0.0.1',r));const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH});const matrix=[], external=new Set();
+            for(const locale of ['pt','en'])for(const theme of ['light','dark'])for(const [w,h] of [[360,800],[390,844],[768,1024],[1280,900],[1440,1000]]){
+              const c=await browser.newContext({viewport:{width:w,height:h},colorScheme:theme});await c.addInitScript(t=>localStorage.setItem('portfolio-theme',t),theme);const p=await c.newPage();const errors=[];p.on('console',m=>{if(m.type()==='error')errors.push(m.text())});p.on('pageerror',e=>errors.push(e.message));const r=await p.goto(`http://127.0.0.1:4173/${locale}`,{waitUntil:'networkidle'});ok(r?.status()===200,`${locale}/${theme}/${w}: HTTP ${r?.status()}`);await scrollAll(p);
+              const s=await p.evaluate(()=>({lang:document.documentElement.lang,dark:document.documentElement.classList.contains('dark'),sw:document.documentElement.scrollWidth,iw:innerWidth,h1:document.querySelectorAll('h1').length,main:!!document.querySelector('main#main-content'),anchors:[...document.querySelectorAll('a[href^="#"]')].map(a=>a.getAttribute('href')).filter(h=>h&&h.length>1&&!document.querySelector(h)),broken:[...document.images].filter(i=>i.offsetParent!==null&&(!i.complete||i.naturalWidth===0)).map(i=>i.currentSrc||i.src),external:[...document.querySelectorAll('a[href^="http"]')].map(a=>a.href)}));s.external.forEach(x=>external.add(x));ok(s.lang.toLowerCase().startsWith(locale),`${locale}/${theme}/${w}: lang ${s.lang}`);ok(s.dark===(theme==='dark'),`${locale}/${theme}/${w}: theme`);ok(s.sw<=s.iw+1,`${locale}/${theme}/${w}: overflow ${s.sw}/${s.iw}`);ok(s.h1===1,`${locale}/${theme}/${w}: h1 ${s.h1}`);ok(s.main,`${locale}/${theme}/${w}: main missing`);ok(!s.anchors.length,`${locale}/${theme}/${w}: anchors ${s.anchors}`);ok(!s.broken.length,`${locale}/${theme}/${w}: broken visible images ${s.broken}`);await p.addScriptTag({content:axeSource});const axe=await p.evaluate(async()=>await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21a','wcag21aa']}}));ok(!axe.violations.length,`${locale}/${theme}/${w}: axe ${axe.violations.map(v=>v.id)}`);ok(!errors.length,`${locale}/${theme}/${w}: console ${errors}`);await p.screenshot({path:path.join(shots,`${locale}-${theme}-${w}.png`),fullPage:true});matrix.push({locale,theme,width:w,axe:0,console:0,overflow:false});await c.close();
+            }
+            const c=await browser.newContext({viewport:{width:390,height:844}});await c.addInitScript(()=>localStorage.setItem('portfolio-theme','light'));const p=await c.newPage();await p.goto('http://127.0.0.1:4173/pt',{waitUntil:'networkidle'});await p.keyboard.press('Tab');ok(await p.evaluate(()=>document.activeElement?.getAttribute('href'))==='#main-content','skip link is not first');await p.keyboard.press('Enter');ok(await p.evaluate(()=>document.activeElement?.id)==='main-content','skip link focus failed');const d=p.locator('details').first();ok(await p.locator('details').count()>0,'no disclosure');await d.locator('summary').focus();await p.keyboard.press('Enter');ok(await d.evaluate(e=>e.open),'keyboard disclosure failed');const buttons=p.locator('button[aria-label]');let toggled=false;for(let i=0;i<await buttons.count();i++){const b=await p.evaluate(()=>document.documentElement.classList.contains('dark'));await buttons.nth(i).click().catch(()=>{});await p.waitForTimeout(40);const a=await p.evaluate(()=>document.documentElement.classList.contains('dark'));if(a!==b){toggled=true;break}}ok(toggled,'theme control failed');const state=await p.evaluate(()=>document.documentElement.classList.contains('dark'));await p.reload({waitUntil:'networkidle'});ok(await p.evaluate(()=>document.documentElement.classList.contains('dark'))===state,'theme persistence failed');await c.close();
+            for(const [loc,expected] of [['pt-BR','pt'],['en-US','en']]){const cc=await browser.newContext({locale:loc,viewport:{width:390,height:844}}),pp=await cc.newPage();await pp.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded'});await pp.waitForURL(`**/${expected}`,{timeout:5000});ok(new URL(pp.url()).pathname===`/${expected}`,`${loc} root routing failed`);await cc.close()}
+            await browser.close();server.close();fs.writeFileSync(path.join(results,'browser-qa.json'),JSON.stringify({matrix,externalLinks:[...external].sort()},null,2));
+          })().catch(e=>{console.error(e);server.close();process.exit(1)});
+          NODE
+          cd /tmp/land-qa && node qa.cjs
+
+      - name: Verify project links and assets
+        run: |
+          node <<'NODE'
+          const fs=require('node:fs');const q=JSON.parse(fs.readFileSync('qa-results/browser-qa.json','utf8'));const links=q.externalLinks.filter(h=>/dev-toolbox|dashboard-economia-brasil|github\.com\/GabrielGuilhermess\/(?:dev-toolbox|dashboard-economia-brasil)/i.test(h));if(links.length!==4)throw new Error(`expected 4 project links, got ${links.length}`);fs.writeFileSync('qa-results/project-links.txt',links.join('\n')+'\n');
+          NODE
+          while IFS= read -r url; do code=$(curl -L --max-time 20 --retry 1 -A 'LAND-0010-QA/1.0' -s -o /dev/null -w '%{http_code}' "$url" || true); echo "$code $url" | tee -a qa-results/project-link-status.txt; case "$code" in 2*|3*) ;; *) exit 1;; esac; done < qa-results/project-links.txt
+          test -s public/images/projects/devtoolbox-2026-09-02.png
+          test -s public/images/projects/economia-brasil-2026-09-02.png
+
+      - name: Output size
+        run: |
+          du -sh out | tee qa-results/output-size.txt
+          find out/_next/static -type f -printf '%s %p\n' | sort -nr | head -20 > qa-results/largest-static-assets.txt || true
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "Lint: ${LINT_MS:-not-completed} ms"
+          echo "Build: ${BUILD_MS:-not-completed} ms"
+          echo "Node: $(node --version)"
+          echo "pnpm: $(pnpm --version)"
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: land-0010-cleanup-qa
+          path: |
+            qa-results
+            osv.json
+          retention-days: 2
