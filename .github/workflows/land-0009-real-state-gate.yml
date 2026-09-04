@@ -1,0 +1,104 @@
+name: LAND-0009 real state gate
+
+on:
+  push:
+    branches:
+      - chore/LAND-0009-real-state-gate
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.20.0
+
+      - name: Install pinned pnpm
+        run: npm install --global pnpm@11.25.0
+
+      - name: Frozen install
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify dependency policy
+        run: |
+          node <<'NODE'
+          const pkg = require('./package.json');
+          if (pkg.packageManager !== 'pnpm@11.25.0') throw new Error(`Unexpected packageManager: ${pkg.packageManager}`);
+          if (pkg.engines?.pnpm !== '11.25.0') throw new Error(`Unexpected pnpm engine: ${pkg.engines?.pnpm}`);
+          for (const group of ['dependencies', 'devDependencies']) {
+            for (const [name, version] of Object.entries(pkg[group] ?? {})) {
+              if (!/^\d+\.\d+\.\d+(?:[-+].+)?$/.test(version)) {
+                throw new Error(`${group}.${name} is not exactly pinned: ${version}`);
+              }
+            }
+          }
+          for (const removed of ['framer-motion', 'lucide-react']) {
+            if (pkg.dependencies?.[removed] || pkg.devDependencies?.[removed]) {
+              throw new Error(`${removed} should not remain a direct dependency`);
+            }
+          }
+          NODE
+
+      - name: Report effective versions
+        run: |
+          node --version
+          pnpm --version
+          pnpm exec next --version
+          pnpm exec eslint --version
+          pnpm exec tsc --version
+          pnpm list --depth 0
+
+      - name: Lint
+        run: |
+          start=$(date +%s%3N)
+          pnpm lint
+          end=$(date +%s%3N)
+          echo "LINT_MS=$((end-start))" >> "$GITHUB_ENV"
+          echo "Lint duration: $((end-start)) ms"
+
+      - name: Production build
+        run: |
+          start=$(date +%s%3N)
+          pnpm build
+          end=$(date +%s%3N)
+          echo "BUILD_MS=$((end-start))" >> "$GITHUB_ENV"
+          echo "Build duration: $((end-start)) ms"
+
+      - name: Verify build leaves tracked state clean
+        run: git diff --exit-code
+
+      - name: Security audit
+        run: |
+          docker run --rm \
+            -v "${PWD}:/src" \
+            ghcr.io/google/osv-scanner@sha256:5116601dedc01c1c580eb92371883ec052fc4c13c3fbc109d621a63ac416d475 \
+            scan -L /src/pnpm-lock.yaml --format json --output-file /src/osv.json
+
+      - name: Dependency freshness report
+        if: always()
+        run: pnpm outdated --format json > outdated.json || true
+
+      - name: Gate summary
+        if: always()
+        run: |
+          echo "Lint: ${LINT_MS:-not-completed} ms"
+          echo "Build: ${BUILD_MS:-not-completed} ms"
+          echo "Node: $(node --version)"
+          echo "pnpm: $(pnpm --version)"
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: land-0009-real-state
+          path: |
+            osv.json
+            outdated.json
+          retention-days: 1
