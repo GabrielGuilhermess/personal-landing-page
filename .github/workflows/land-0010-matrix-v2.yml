@@ -1,0 +1,190 @@
+name: LAND-0010 20-scenario validation
+
+on:
+  push:
+    branches:
+      - test/LAND-0010-matrix-v2
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+      PLAYWRIGHT_VERSION: 1.62.1
+      AXE_VERSION: 4.13.0
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.20.0
+          package-manager-cache: false
+
+      - name: Install pinned pnpm
+        run: npm install --global pnpm@11.25.0
+
+      - name: Build release candidate
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm lint
+          pnpm build
+          git diff --exit-code
+
+      - name: Install pinned browser validation tools
+        run: |
+          mkdir -p /tmp/land-validation
+          cd /tmp/land-validation
+          npm init -y >/dev/null
+          npm install --save-exact "playwright@${PLAYWRIGHT_VERSION}" "axe-core@${AXE_VERSION}"
+          CHROME_PATH="$(which google-chrome || which google-chrome-stable)"
+          echo "CHROME_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+
+      - name: Validate 20 scenarios
+        run: |
+          mkdir -p validation-results/screenshots
+          cat > /tmp/land-validation/validate.cjs <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const http = require('node:http');
+          const { chromium } = require('playwright');
+          const axeSource = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
+          const root = process.env.GITHUB_WORKSPACE;
+          const out = path.join(root, 'out');
+          const resultsDir = path.join(root, 'validation-results');
+          const shotsDir = path.join(resultsDir, 'screenshots');
+          const mime = { '.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.woff':'font/woff','.woff2':'font/woff2' };
+          const server = http.createServer((req,res) => {
+            const clean = decodeURIComponent((req.url || '/').split('?')[0]);
+            const rel = clean.replace(/^\/+/, '');
+            const candidates = clean === '/' ? [path.join(out,'index.html')] : [path.join(out,rel),path.join(out,rel+'.html'),path.join(out,rel,'index.html')];
+            const file = candidates.find(p => fs.existsSync(p) && fs.statSync(p).isFile());
+            if (!file || !path.resolve(file).startsWith(path.resolve(out))) { res.writeHead(404); return res.end('Not found'); }
+            res.writeHead(200, {'content-type': mime[path.extname(file)] || 'application/octet-stream'});
+            fs.createReadStream(file).pipe(res);
+          });
+          const assert = (value, message) => { if (!value) throw new Error(message); };
+          async function decodeVisibleImages(page) {
+            const images = page.locator('img:visible');
+            const count = await images.count();
+            for (let i = 0; i < count; i++) {
+              const image = images.nth(i);
+              await image.scrollIntoViewIfNeeded();
+              await image.evaluate(async img => {
+                if (!img.complete) {
+                  await new Promise((resolve, reject) => {
+                    const timer = setTimeout(() => reject(new Error(`image timeout: ${img.currentSrc || img.src}`)), 5000);
+                    img.addEventListener('load', () => { clearTimeout(timer); resolve(); }, { once:true });
+                    img.addEventListener('error', () => { clearTimeout(timer); reject(new Error(`image error: ${img.currentSrc || img.src}`)); }, { once:true });
+                  });
+                }
+                await img.decode();
+              });
+            }
+            await page.evaluate(() => scrollTo(0,0));
+          }
+          (async () => {
+            await new Promise(resolve => server.listen(4173,'127.0.0.1',resolve));
+            const browser = await chromium.launch({ headless:true, executablePath:process.env.CHROME_PATH });
+            const widths = [[360,800],[390,844],[768,1024],[1280,900],[1440,1000]];
+            const matrix = [];
+            for (const locale of ['pt','en']) {
+              for (const theme of ['light','dark']) {
+                for (const [width,height] of widths) {
+                  const context = await browser.newContext({ viewport:{width,height}, colorScheme:theme });
+                  await context.addInitScript(value => localStorage.setItem('portfolio-theme', value), theme);
+                  const page = await context.newPage();
+                  const errors = [];
+                  page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+                  page.on('pageerror', err => errors.push(err.message));
+                  const response = await page.goto(`http://127.0.0.1:4173/${locale}`, { waitUntil:'networkidle' });
+                  assert(response?.status() === 200, `${locale}/${theme}/${width}: HTTP ${response?.status()}`);
+                  await decodeVisibleImages(page);
+                  const state = await page.evaluate(() => ({
+                    lang: document.documentElement.lang,
+                    dark: document.documentElement.classList.contains('dark'),
+                    scrollWidth: document.documentElement.scrollWidth,
+                    innerWidth,
+                    h1: document.querySelectorAll('h1').length,
+                    main: !!document.querySelector('main#main-content'),
+                    missingAnchors: [...document.querySelectorAll('a[href^="#"]')]
+                      .map(a => a.getAttribute('href'))
+                      .filter(href => href && href.length > 1 && !document.querySelector(href)),
+                    visibleImages: [...document.images]
+                      .filter(img => img.offsetWidth > 0 && img.offsetHeight > 0)
+                      .map(img => ({ src:img.currentSrc || img.src, complete:img.complete, naturalWidth:img.naturalWidth })),
+                  }));
+                  assert(state.lang.toLowerCase().startsWith(locale), `${locale}/${theme}/${width}: lang=${state.lang}`);
+                  assert(state.dark === (theme === 'dark'), `${locale}/${theme}/${width}: theme mismatch`);
+                  assert(state.scrollWidth <= state.innerWidth + 1, `${locale}/${theme}/${width}: horizontal overflow ${state.scrollWidth}/${state.innerWidth}`);
+                  assert(state.h1 === 1, `${locale}/${theme}/${width}: h1=${state.h1}`);
+                  assert(state.main, `${locale}/${theme}/${width}: main missing`);
+                  assert(state.missingAnchors.length === 0, `${locale}/${theme}/${width}: missing anchors ${state.missingAnchors.join(',')}`);
+                  assert(state.visibleImages.every(img => img.complete && img.naturalWidth > 0), `${locale}/${theme}/${width}: visible image decode failure`);
+                  await page.addScriptTag({ content:axeSource });
+                  const axe = await page.evaluate(async () => await axe.run(document, { runOnly:{ type:'tag', values:['wcag2a','wcag2aa','wcag21a','wcag21aa'] } }));
+                  assert(axe.violations.length === 0, `${locale}/${theme}/${width}: axe ${axe.violations.map(v => v.id).join(',')}`);
+                  assert(errors.length === 0, `${locale}/${theme}/${width}: console ${errors.join(' | ')}`);
+                  await page.screenshot({ path:path.join(shotsDir,`${locale}-${theme}-${width}.png`), fullPage:true });
+                  matrix.push({ locale, theme, width, overflow:false, axeViolations:0, consoleErrors:0, visibleImages:state.visibleImages.length });
+                  await context.close();
+                }
+              }
+            }
+            assert(matrix.length === 20, `expected 20 scenarios, got ${matrix.length}`);
+
+            const interaction = await browser.newContext({ viewport:{width:390,height:844}, colorScheme:'light' });
+            await interaction.addInitScript(() => localStorage.setItem('portfolio-theme','light'));
+            const page = await interaction.newPage();
+            await page.goto('http://127.0.0.1:4173/pt', { waitUntil:'networkidle' });
+            await page.keyboard.press('Tab');
+            assert(await page.evaluate(() => document.activeElement?.getAttribute('href')) === '#main-content', 'skip link is not first keyboard target');
+            await page.keyboard.press('Enter');
+            assert(await page.evaluate(() => document.activeElement?.id) === 'main-content', 'skip link did not focus main');
+            const details = page.locator('details');
+            assert(await details.count() > 0, 'no disclosure found');
+            await details.first().locator('summary').focus();
+            await page.keyboard.press('Enter');
+            assert(await details.first().evaluate(el => el.open), 'disclosure keyboard interaction failed');
+            const themeButtons = page.locator('button[aria-label]');
+            let toggled = false;
+            for (let i=0; i<await themeButtons.count(); i++) {
+              const before = await page.evaluate(() => document.documentElement.classList.contains('dark'));
+              await themeButtons.nth(i).click().catch(() => {});
+              await page.waitForTimeout(50);
+              const after = await page.evaluate(() => document.documentElement.classList.contains('dark'));
+              if (before !== after) { toggled = true; break; }
+            }
+            assert(toggled, 'theme control did not toggle');
+            const persisted = await page.evaluate(() => document.documentElement.classList.contains('dark'));
+            await page.reload({ waitUntil:'networkidle' });
+            assert(await page.evaluate(() => document.documentElement.classList.contains('dark')) === persisted, 'theme did not persist');
+            await interaction.close();
+
+            for (const [browserLocale, expected] of [['pt-BR','pt'],['en-US','en']]) {
+              const context = await browser.newContext({ locale:browserLocale, viewport:{width:390,height:844} });
+              const page = await context.newPage();
+              await page.goto('http://127.0.0.1:4173/', { waitUntil:'domcontentloaded' });
+              await page.waitForURL(`**/${expected}`, { timeout:5000 });
+              assert(new URL(page.url()).pathname === `/${expected}`, `${browserLocale}: root routing failed`);
+              await context.close();
+            }
+
+            fs.writeFileSync(path.join(resultsDir,'matrix.json'), JSON.stringify({ count:matrix.length, matrix }, null, 2));
+            await browser.close();
+            server.close();
+            console.log(`MATRIX_PASS=${matrix.length}/20`);
+          })().catch(error => { console.error(error); server.close(); process.exit(1); });
+          NODE
+          cd /tmp/land-validation
+          node validate.cjs
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: land-0010-20-scenario-validation
+          path: validation-results
+          retention-days: 2
